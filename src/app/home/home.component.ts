@@ -1,4 +1,4 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { WalletService } from '../services/wallet.service';
@@ -7,13 +7,15 @@ import { ERC20ABI } from '../../abi/ERC20';
 import { CHAIN_ID, CONTRACT_ADDRESSES, ChainIdType } from '../services/address';
 import { FactoryABI } from '../../abi/Factory';
 import { Contract, uint256 } from 'starknet';
+import { feltToString, formatUnits } from '../utils/starknet-utils';
 
 @Component({
   selector: 'app-home',
   standalone: true,
   imports: [CommonModule, FormsModule],
   templateUrl: './home.component.html',
-  styleUrl: './home.component.css'
+  styleUrl: './home.component.css',
+  changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class HomeComponent {
   walletService = inject(WalletService);
@@ -207,8 +209,8 @@ export class HomeComponent {
       ]);
 
       // Decode felt252 to string for name and symbol
-      this.nftName.set(this.feltToString(name));
-      this.nftSymbol.set(this.feltToString(symbol));
+      this.nftName.set(feltToString(name));
+      this.nftSymbol.set(feltToString(symbol));
 
       // Convert balance from u256 to number
       const balanceBigInt = uint256.uint256ToBN(balance);
@@ -222,40 +224,6 @@ export class HomeComponent {
     } finally {
       this.isCheckingNFT.set(false);
     }
-  }
-
-  /**
-   * Convert felt252 to string
-   */
-  private feltToString(felt: any): string {
-    if (typeof felt === 'string') {
-      // If it's already a hex string, decode it
-      if (felt.startsWith('0x')) {
-        const hex = felt.slice(2);
-        let str = '';
-        for (let i = 0; i < hex.length; i += 2) {
-          const charCode = parseInt(hex.substr(i, 2), 16);
-          if (charCode !== 0) {
-            str += String.fromCharCode(charCode);
-          }
-        }
-        return str;
-      }
-      return felt;
-    }
-    // If it's a BigInt, convert to hex and decode
-    if (typeof felt === 'bigint') {
-      const hex = felt.toString(16);
-      let str = '';
-      for (let i = 0; i < hex.length; i += 2) {
-        const charCode = parseInt(hex.substr(i, 2), 16);
-        if (charCode !== 0) {
-          str += String.fromCharCode(charCode);
-        }
-      }
-      return str;
-    }
-    return String(felt);
   }
 
   /**
@@ -295,13 +263,13 @@ export class HomeComponent {
       ]);
 
       // Decode felt252 to string for name and symbol
-      this.tokenName.set(this.feltToString(name));
-      this.tokenSymbol.set(this.feltToString(symbol));
+      this.tokenName.set(feltToString(name));
+      this.tokenSymbol.set(feltToString(symbol));
       this.tokenDecimals.set(Number(decimals));
 
       // Convert balance from u256 to string with decimals
       const balanceBigInt = uint256.uint256ToBN(balance);
-      this.tokenBalance.set(this.formatUnits(balanceBigInt, Number(decimals)));
+      this.tokenBalance.set(formatUnits(balanceBigInt, Number(decimals)));
 
       // Check token approval
       await this.checkERC20Approval();
@@ -311,27 +279,6 @@ export class HomeComponent {
     } finally {
       this.isCheckingToken.set(false);
     }
-  }
-
-  /**
-   * Format a BigInt value with decimals
-   */
-  private formatUnits(value: bigint, decimals: number): string {
-    const divisor = BigInt(10 ** decimals);
-    const integerPart = value / divisor;
-    const fractionalPart = value % divisor;
-
-    let fractionalStr = fractionalPart.toString().padStart(decimals, '0');
-    fractionalStr = fractionalStr.replace(/0+$/, '');
-
-    if (fractionalStr.length === 0) {
-      return integerPart.toString();
-    }
-
-    // Limit to 6 decimal places
-    fractionalStr = fractionalStr.slice(0, 6);
-
-    return `${integerPart}.${fractionalStr}`;
   }
 
   /**
@@ -361,7 +308,7 @@ export class HomeComponent {
       this.tokenAllowanceRaw.set(allowanceBigInt);
 
       // Format the allowance for display
-      this.tokenAllowance.set(this.formatUnits(allowanceBigInt, this.tokenDecimals()));
+      this.tokenAllowance.set(formatUnits(allowanceBigInt, this.tokenDecimals()));
 
       // Consider approved if allowance is greater than 0
       this.isTokenApproved.set(allowanceBigInt > 0n);

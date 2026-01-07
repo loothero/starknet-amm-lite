@@ -1,13 +1,21 @@
 import { Routes } from '@angular/router';
-import { HomeComponent } from './home/home.component';
-import { BrowseComponent } from './browse/browse.component';
-import { ManageComponent } from './manage/manage.component';
-import { KamiComponent } from './kami/kami.component';
 
 export const routes: Routes = [
-  { path: '', component: HomeComponent },
-  { path: 'browse/:label/:address', component: BrowseComponent },
-  { path: 'manage/:label/:address', component: ManageComponent },
-  { path: 'kami/:id', component: KamiComponent },
+  {
+    path: '',
+    loadComponent: () => import('./home/home.component').then(m => m.HomeComponent)
+  },
+  {
+    path: 'browse/:label/:address',
+    loadComponent: () => import('./browse/browse.component').then(m => m.BrowseComponent)
+  },
+  {
+    path: 'manage/:label/:address',
+    loadComponent: () => import('./manage/manage.component').then(m => m.ManageComponent)
+  },
+  {
+    path: 'kami/:id',
+    loadComponent: () => import('./kami/kami.component').then(m => m.KamiComponent)
+  },
   { path: '**', redirectTo: '' }
 ];

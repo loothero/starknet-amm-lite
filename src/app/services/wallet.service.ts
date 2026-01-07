@@ -100,27 +100,30 @@ export class WalletService {
 
   /**
    * Get available Starknet wallets from the window object
+   * @returns Array of detected wallet objects
    */
-  private async getAvailableWallets(): Promise<any[]> {
-    const wallets: any[] = [];
+  private async getAvailableWallets(): Promise<StarknetWallet[]> {
+    const wallets: StarknetWallet[] = [];
 
     // Check for common Starknet wallets
     if (typeof window !== 'undefined') {
-      const win = window as any;
+      // Type-safe window access for injected wallet objects
+      const win = window as unknown as Record<string, StarknetWallet | undefined>;
 
       // ArgentX
-      if (win.starknet_argentX) {
-        wallets.push(win.starknet_argentX);
+      if (win['starknet_argentX']) {
+        wallets.push(win['starknet_argentX']);
       }
 
       // Braavos
-      if (win.starknet_braavos) {
-        wallets.push(win.starknet_braavos);
+      if (win['starknet_braavos']) {
+        wallets.push(win['starknet_braavos']);
       }
 
       // Generic starknet object (legacy)
-      if (win.starknet && !wallets.includes(win.starknet)) {
-        wallets.push(win.starknet);
+      const genericWallet = win['starknet'];
+      if (genericWallet && !wallets.includes(genericWallet)) {
+        wallets.push(genericWallet);
       }
     }
 

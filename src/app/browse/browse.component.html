@@ -37,7 +37,7 @@
                   <div class="flex justify-between items-center mb-2">
                     <p class="text-sm text-gray-400">Pair: {{ listing.pairAddress }}</p>
                     <div class="bg-zinc-700 px-2 py-1 rounded-full text-xs text-white">
-                      Price: {{ formatPrice(listing.price) }} {{ getTokenSymbol() }}
+                      Price: {{ formatPriceDisplay(listing.price) }} {{ getTokenSymbol() }}
                     </div>
                   </div>
                   <p class="text-sm text-white">NFT IDs: {{ listing.nftIds.length > 0 ? (listing.nftIds.length > 5 ? listing.nftIds.slice(0, 5).join(', ') + '...' : listing.nftIds.join(', ')) : 'None' }}</p>

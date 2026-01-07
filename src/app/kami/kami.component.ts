@@ -1,4 +1,4 @@
-import { Component, OnInit, inject, signal } from '@angular/core';
+import { Component, OnInit, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ActivatedRoute, Router } from '@angular/router';
 import { WalletService } from '../services/wallet.service';
@@ -11,7 +11,8 @@ import { Contract, uint256 } from 'starknet';
   standalone: true,
   imports: [CommonModule],
   templateUrl: './kami.component.html',
-  styleUrl: './kami.component.css'
+  styleUrl: './kami.component.css',
+  changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class KamiComponent implements OnInit {
   private route = inject(ActivatedRoute);
