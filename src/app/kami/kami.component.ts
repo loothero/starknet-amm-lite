@@ -3,7 +3,8 @@ import { CommonModule } from '@angular/common';
 import { ActivatedRoute, Router } from '@angular/router';
 import { WalletService } from '../services/wallet.service';
 import { CHAIN_ID, ChainIdType, CONTRACT_ADDRESSES } from '../services/address';
-import { ERC721 } from '../../abi/ERC721';
+import { ERC721ABI } from '../../abi/ERC721';
+import { Contract, uint256 } from 'starknet';
 
 @Component({
   selector: 'app-kami',
@@ -27,25 +28,14 @@ export class KamiComponent implements OnInit {
 
   // Get the current chain ID from the wallet service
   get currentChainId(): ChainIdType {
-    const chain = this.walletService.getCurrentChain();
-    if (!chain) return CHAIN_ID.YOMINET; // Default to YOMINET if no chain is available
-
-    // Map the chain ID to our CHAIN_ID constants
-    switch (chain.id) {
-      case parseInt('0x18623A6A54F3F', 16): // Yominet chain ID
-        return CHAIN_ID.YOMINET;
-      case parseInt('0x4be439dcd8b3f', 16): // Zaar chain ID
-        return CHAIN_ID.ZAAR;
-      default:
-        return CHAIN_ID.YOMINET; // Default to YOMINET for unknown chains
-    }
+    return this.walletService.getCurrentChainId();
   }
 
   ngOnInit(): void {
     // Subscribe to route params to get the ID
     this.route.paramMap.subscribe(params => {
       this.id = params.get('id');
-      
+
       // If wallet is already connected, check the network and process the ID
       if (this.walletService.isConnected()) {
         this.checkNetworkAndProcessId();
@@ -57,10 +47,10 @@ export class KamiComponent implements OnInit {
    * Check if the user is on the correct network and process the ID
    */
   private async checkNetworkAndProcessId(): Promise<void> {
-    // Check if we're on YOMINET
-    if (this.currentChainId !== CHAIN_ID.YOMINET) {
+    // Check if we're on MAINNET
+    if (this.currentChainId !== CHAIN_ID.MAINNET) {
       this.isWrongNetwork.set(true);
-      this.errorMessage.set('Please connect to the YOMINET network to view this KAMI NFT.');
+      this.errorMessage.set('Please connect to Starknet Mainnet to view this NFT.');
       return;
     }
 
@@ -74,41 +64,35 @@ export class KamiComponent implements OnInit {
   }
 
   /**
-   * Process the KAMI ID by calling ownerOf and redirecting if it's a pool
+   * Process the KAMI ID by calling owner_of and redirecting if it's a pool
    */
   private async processKamiId(id: string): Promise<void> {
     try {
       this.isLoading.set(true);
       this.errorMessage.set('');
 
-      // Get the public client
-      const publicClient = this.walletService.getPublicClient();
-      if (!publicClient) {
-        throw new Error('No public client available');
-      }
+      const provider = this.walletService.getProvider();
 
-      // Get the KAMI contract address
-      const kamiAddress = CONTRACT_ADDRESSES[CHAIN_ID.YOMINET].KAMI;
+      // Get the KAMI contract address (placeholder - would need to be set in address.ts)
+      const kamiAddress = CONTRACT_ADDRESSES[CHAIN_ID.MAINNET].PAIR_FACTORY; // Using factory as placeholder
       if (!kamiAddress) {
-        throw new Error('KAMI contract address not found');
+        throw new Error('Contract address not found');
       }
 
-      console.log(`Calling ownerOf(${id}) on KAMI contract at ${kamiAddress}`);
+      console.log(`Calling owner_of(${id}) on contract at ${kamiAddress}`);
 
-      // Call ownerOf on the KAMI contract
-      const owner = await publicClient.readContract({
-        address: kamiAddress as `0x${string}`,
-        abi: ERC721,
-        functionName: 'ownerOf',
-        args: [BigInt(id)]
-      }) as `0x${string}`;
+      // Create contract instance
+      const nftContract = new Contract(ERC721ABI, kamiAddress, provider);
 
-      console.log(`Owner of KAMI #${id} is ${owner}`);
+      // Call owner_of on the NFT contract
+      const owner = await nftContract.owner_of(uint256.bnToUint256(BigInt(id)));
+
+      console.log(`Owner of NFT #${id} is ${owner}`);
 
       // Redirect to the manage route with the pool address
-      this.router.navigate(['/manage', 'yominet', owner]);
+      this.router.navigate(['/manage', 'mainnet', owner]);
     } catch (error) {
-      console.error('Error processing KAMI ID:', error);
+      console.error('Error processing NFT ID:', error);
       this.errorMessage.set(`Error: ${error instanceof Error ? error.message : String(error)}`);
     } finally {
       this.isLoading.set(false);

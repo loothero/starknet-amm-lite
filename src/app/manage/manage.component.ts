@@ -4,17 +4,10 @@ import { ActivatedRoute } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { WalletService } from '../services/wallet.service';
 import { NFTService, TransactionStatus } from '../services/nft.service';
-import { CHAIN_ID, ChainIdType, CONTRACT_ADDRESSES } from '../services/address';
-import { Pair721 } from '../../abi/Pair721';
-import { Multicall } from '../../abi/Multicall';
-import { ERC721 } from '../../abi/ERC721';
-import { encodeFunctionData, decodeFunctionResult, formatEther } from 'viem';
-
-// Define a type for the multicall calls
-interface MulticallCall {
-  target: `0x${string}`;
-  callData: `0x${string}`;
-}
+import { CHAIN_ID, ChainIdType, CONTRACT_ADDRESSES, normalizeStarknetAddress } from '../services/address';
+import { Pair721ABI } from '../../abi/Pair721';
+import { ERC721ABI } from '../../abi/ERC721';
+import { Contract, uint256 } from 'starknet';
 
 // Define a type for NFT attributes
 interface NFTAttribute {
@@ -56,7 +49,7 @@ export class ManageComponent implements OnInit {
   address: string | null = null;
 
   // Chain information
-  chainId: ChainIdType = CHAIN_ID.YOMINET; // Default to YOMINET
+  chainId: ChainIdType = CHAIN_ID.MAINNET; // Default to MAINNET
 
   // NFT IDs data
   nftIds = signal<readonly bigint[]>([]);
@@ -80,18 +73,7 @@ export class ManageComponent implements OnInit {
 
   // Get the current chain ID from the wallet service
   get currentChainId(): ChainIdType {
-    const chain = this.walletService.getCurrentChain();
-    if (!chain) return CHAIN_ID.YOMINET; // Default to YOMINET if no chain is available
-
-    // Map the chain ID to our CHAIN_ID constants
-    switch (chain.id) {
-      case parseInt('0x18623A6A54F3F', 16): // Yominet chain ID
-        return CHAIN_ID.YOMINET;
-      case parseInt('0x4be439dcd8b3f', 16): // Zaar chain ID
-        return CHAIN_ID.ZAAR;
-      default:
-        return CHAIN_ID.YOMINET; // Default to YOMINET for unknown chains
-    }
+    return this.walletService.getCurrentChainId();
   }
 
   ngOnInit(): void {
@@ -124,14 +106,14 @@ export class ManageComponent implements OnInit {
     // Convert label to lowercase for case-insensitive comparison
     const labelLower = label.toLowerCase();
 
-    if (labelLower === 'yominet') {
-      this.chainId = CHAIN_ID.YOMINET;
-    } else if (labelLower === 'zaar') {
-      this.chainId = CHAIN_ID.ZAAR;
+    if (labelLower === 'mainnet' || labelLower === 'starknet') {
+      this.chainId = CHAIN_ID.MAINNET;
+    } else if (labelLower === 'sepolia' || labelLower === 'testnet') {
+      this.chainId = CHAIN_ID.SEPOLIA;
     } else {
-      // Default to YOMINET if label is not recognized
-      this.chainId = CHAIN_ID.YOMINET;
-      console.warn(`Unrecognized chain label: ${label}, defaulting to YOMINET`);
+      // Default to MAINNET if label is not recognized
+      this.chainId = CHAIN_ID.MAINNET;
+      console.warn(`Unrecognized chain label: ${label}, defaulting to MAINNET`);
     }
   }
 
@@ -172,120 +154,55 @@ export class ManageComponent implements OnInit {
       this.withdrawSuccess.set(false);
       this.withdrawError.set('');
 
-      const publicClient = this.walletService.getPublicClient();
-      if (!publicClient) {
-        this.errorMessage.set('No public client available');
-        this.isLoading.set(false);
-        return;
-      }
-
-      // Get the Multicall contract address for the current chain
-      const multicallAddress = CONTRACT_ADDRESSES[this.currentChainId].MULTICALL as `0x${string}`;
+      const provider = this.walletService.getProvider();
 
       console.log('Fetching NFT IDs for pair:', {
-        pairAddress,
-        multicallAddress
+        pairAddress
       });
 
-      // Prepare the calls for Multicall to get getAllIds, nft address, owner, and price quote
-      const calls: MulticallCall[] = [
-        {
-          target: pairAddress as `0x${string}`,
-          callData: encodeFunctionData({
-            abi: Pair721,
-            functionName: 'getAllIds'
-          })
-        },
-        {
-          target: pairAddress as `0x${string}`,
-          callData: encodeFunctionData({
-            abi: Pair721,
-            functionName: 'nft'
-          })
-        },
-        {
-          target: pairAddress as `0x${string}`,
-          callData: encodeFunctionData({
-            abi: Pair721,
-            functionName: 'getBuyNFTQuote',
-            args: [0n, 1n] // id=0, quantity=1
-          })
-        },
-        {
-          target: pairAddress as `0x${string}`,
-          callData: encodeFunctionData({
-            abi: Pair721,
-            functionName: 'owner'
-          })
-        }
-      ];
+      // Create pair contract instance
+      const pairContract = new Contract(Pair721ABI, pairAddress, provider);
 
-      // Execute the Multicall
-      const result = await publicClient.readContract({
-        address: multicallAddress,
-        abi: Multicall,
-        functionName: 'aggregate' as any,
-        args: [calls as any]
-      }) as unknown;
+      // Fetch all data in parallel
+      const [ids, nftAddress, quote, ownerAddress] = await Promise.all([
+        pairContract.get_all_ids(),
+        pairContract.nft(),
+        pairContract.get_buy_nft_quote(uint256.bnToUint256(0n), uint256.bnToUint256(1n)),
+        pairContract.owner()
+      ]);
 
-      // Extract the return data from the result
-      const [, returnData] = result as [bigint, `0x${string}`[]];
+      // Extract the inputAmount from the quote result
+      const inputAmount = quote.input_amount ? uint256.uint256ToBN(quote.input_amount) : 0n;
 
-      // Decode the getAllIds result
-      const ids = decodeFunctionResult({
-        abi: Pair721,
-        functionName: 'getAllIds',
-        data: returnData[0]
-      });
+      // Convert IDs from u256 to bigint
+      const idsBigInt = Array.isArray(ids) ? ids.map((id: any) => uint256.uint256ToBN(id)) : [];
 
-      // Decode the nft address result
-      const nftAddress = decodeFunctionResult({
-        abi: Pair721,
-        functionName: 'nft',
-        data: returnData[1]
-      });
-
-      // Decode the getBuyNFTQuote result
-      const quoteResult = decodeFunctionResult({
-        abi: Pair721,
-        functionName: 'getBuyNFTQuote',
-        data: returnData[2]
-      }) as [number, bigint, bigint, bigint, bigint, bigint]; // [error, newSpotPrice, newDelta, inputAmount, protocolFee, royaltyAmount]
-
-      // Decode the owner result
-      const ownerAddress = decodeFunctionResult({
-        abi: Pair721,
-        functionName: 'owner',
-        data: returnData[3]
-      }) as string;
-
-      // Extract the inputAmount (index 3 in the result array)
-      const inputAmount = quoteResult[3];
-
-      console.log('NFT IDs for pair:', ids);
+      console.log('NFT IDs for pair:', idsBigInt);
       console.log('NFT contract address:', nftAddress);
       console.log('Buy NFT price quote:', inputAmount);
       console.log('Pool owner address:', ownerAddress);
 
       // Check if the current wallet address is the pool owner
-      const walletAddress = this.walletService.walletAddress()!;
-      const isOwner = walletAddress.toLowerCase() === ownerAddress.toLowerCase();
+      const walletAddress = this.walletService.walletAddress();
+      const isOwner = walletAddress
+        ? normalizeStarknetAddress(walletAddress) === normalizeStarknetAddress(ownerAddress)
+        : false;
 
       // Update the signals
-      this.nftIds.set(ids);
-      this.nftContractAddress.set(nftAddress as string);
+      this.nftIds.set(idsBigInt);
+      this.nftContractAddress.set(nftAddress);
       this.nftPrice.set(inputAmount);
       this.isPoolOwner.set(isOwner);
 
       // Set the selected NFT ID to the first ID if available
-      if (ids.length > 0) {
-        this.selectedNftId.set(ids[0]);
+      if (idsBigInt.length > 0) {
+        this.selectedNftId.set(idsBigInt[0]);
       } else {
         this.selectedNftId.set(null);
       }
 
       // Create NFT data list with initial data
-      const nftDataList = ids.map(id => ({
+      const nftDataList = idsBigInt.map(id => ({
         id,
         price: inputAmount,
         isLoadingMetadata: false,
@@ -296,8 +213,8 @@ export class ManageComponent implements OnInit {
       this.nftDataList.set(nftDataList);
 
       // Fetch metadata for all NFTs
-      if (ids.length > 0) {
-        await this.fetchNFTMetadata(nftAddress as string, nftDataList);
+      if (idsBigInt.length > 0) {
+        await this.fetchNFTMetadata(nftAddress, nftDataList);
       }
     } catch (error) {
       console.error('Error fetching NFT IDs for pair:', error);
@@ -321,9 +238,9 @@ export class ManageComponent implements OnInit {
       this.withdrawSuccess.set(false);
       this.withdrawError.set('');
 
-      const walletClient = this.walletService.getWalletClient();
-      if (!walletClient) {
-        this.withdrawError.set('No wallet client available');
+      const account = this.walletService.getAccount();
+      if (!account) {
+        this.withdrawError.set('No account available');
         this.isWithdrawing.set(false);
         return;
       }
@@ -342,26 +259,21 @@ export class ManageComponent implements OnInit {
         walletAddress
       });
 
-      // Call withdrawERC721 on the pair contract
-      const hash = await walletClient.writeContract({
-        address: this.address as `0x${string}`,
-        abi: Pair721,
-        functionName: 'withdrawERC721',
-        args: [
-          this.nftContractAddress() as `0x${string}`,
-          [...this.nftIds()] // Convert readonly array to regular array
-        ],
-        chain: this.walletService.getCurrentChain(),
-        account: walletAddress as `0x${string}`
-      });
+      // Convert NFT IDs to u256 format for Starknet
+      const nftIdsU256 = this.nftIds().map(id => uint256.bnToUint256(id));
 
-      console.log('Withdrawal transaction hash:', hash);
+      // Call withdraw_erc721 on the pair contract
+      const txHash = await this.walletService.executeTransaction(
+        this.address,
+        Pair721ABI,
+        'withdraw_erc721',
+        [this.nftContractAddress(), nftIdsU256]
+      );
 
-      // Wait for the transaction to be mined
-      const publicClient = this.walletService.getPublicClient();
-      if (publicClient) {
-        await publicClient.waitForTransactionReceipt({ hash });
-      }
+      console.log('Withdrawal transaction hash:', txHash);
+
+      // Wait for the transaction to be confirmed
+      await this.walletService.waitForTransaction(txHash);
 
       // Set success state
       this.withdrawSuccess.set(true);
@@ -394,24 +306,24 @@ export class ManageComponent implements OnInit {
    */
   formatPrice(price: bigint): string {
     try {
-      // Convert the bigint to a string with 18 decimal places (ETH format)
-      const ethPrice = formatEther(price);
+      // Convert the bigint to ETH format (18 decimals)
+      const divisor = BigInt(10 ** 18);
+      const integerPart = price / divisor;
+      const fractionalPart = price % divisor;
 
-      // Parse the string to a number and limit to 6 decimal places
-      const numPrice = parseFloat(ethPrice);
+      let fractionalStr = fractionalPart.toString().padStart(18, '0');
+      fractionalStr = fractionalStr.replace(/0+$/, '');
+
+      const numPrice = parseFloat(`${integerPart}.${fractionalStr || '0'}`);
 
       // Format the number based on its size
       if (numPrice < 0.000001 && numPrice > 0) {
-        // For very small numbers, use scientific notation
         return numPrice.toExponential(2);
       } else if (numPrice < 0.001) {
-        // For small numbers, show more decimal places
         return numPrice.toFixed(6);
       } else if (numPrice < 1) {
-        // For medium numbers, show fewer decimal places
         return numPrice.toFixed(4);
       } else {
-        // For larger numbers, show even fewer decimal places
         return numPrice.toFixed(2);
       }
     } catch (error) {
@@ -488,6 +400,9 @@ export class ManageComponent implements OnInit {
         nftCount: nftDataList.length
       });
 
+      const provider = this.walletService.getProvider();
+      const nftContract = new Contract(ERC721ABI, nftAddress, provider);
+
       // Process NFTs sequentially to avoid rate limiting
       for (let i = 0; i < nftDataList.length; i++) {
         const nftData = nftDataList[i];
@@ -501,8 +416,11 @@ export class ManageComponent implements OnInit {
         });
 
         try {
-          // Fetch tokenURI for this NFT
-          const metadata = await this.fetchTokenURI(nftAddress, nftData.id);
+          // Fetch token_uri for this NFT
+          const tokenURI = await nftContract.token_uri(uint256.bnToUint256(nftData.id));
+
+          // Parse the metadata
+          const metadata = this.parseTokenURI(tokenURI);
 
           // Update the NFT data with metadata
           nftData.metadata = metadata;
@@ -538,56 +456,35 @@ export class ManageComponent implements OnInit {
   }
 
   /**
-   * Fetch tokenURI for a single NFT
-   * @param nftAddress The NFT contract address
-   * @param tokenId The token ID
-   * @returns The parsed metadata
-   */
-  async fetchTokenURI(nftAddress: string, tokenId: bigint): Promise<NFTMetadata> {
-    const publicClient = this.walletService.getPublicClient();
-    if (!publicClient) {
-      throw new Error('No public client available');
-    }
-
-    // Call tokenURI on the NFT contract
-    const tokenURI = await publicClient.readContract({
-      address: nftAddress as `0x${string}`,
-      abi: ERC721,
-      functionName: 'tokenURI',
-      args: [tokenId]
-    }) as string;
-
-    // Parse the metadata
-    return this.parseBase64Metadata(tokenURI);
-  }
-
-  /**
-   * Parse base64 encoded metadata from tokenURI
-   * @param tokenURI The token URI string
+   * Parse tokenURI which could be an array of felt252 or a string
+   * @param tokenURI The token URI from Starknet
    * @returns Parsed metadata object
    */
-  private parseBase64Metadata(tokenURI: string): NFTMetadata {
+  private parseTokenURI(tokenURI: any): NFTMetadata {
     try {
+      let uriString: string;
+
+      // Handle array of felt252 (Starknet string representation)
+      if (Array.isArray(tokenURI)) {
+        uriString = tokenURI.map((felt: any) => this.feltToString(felt)).join('');
+      } else {
+        uriString = this.feltToString(tokenURI);
+      }
+
       // Check if this is base64 encoded data
-      if (tokenURI.startsWith('data:application/json;base64,')) {
-        // Extract the base64 encoded part
-        const base64Data = tokenURI.replace('data:application/json;base64,', '');
-
-        // Decode the base64 data
+      if (uriString.startsWith('data:application/json;base64,')) {
+        const base64Data = uriString.replace('data:application/json;base64,', '');
         const jsonString = atob(base64Data);
-
-        // Parse the JSON
         return JSON.parse(jsonString);
       }
-      // If it's a URL, we would need to fetch it, but for now we'll return a placeholder
-      else {
-        console.log('Non-base64 tokenURI detected:', tokenURI);
-        return {
-          name: `Token #${tokenURI}`,
-          image: '',
-          attributes: []
-        };
-      }
+
+      // If it's a URL, return a placeholder
+      console.log('Non-base64 tokenURI detected:', uriString);
+      return {
+        name: `Token`,
+        image: uriString,
+        attributes: []
+      };
     } catch (error) {
       console.error('Error parsing metadata:', error);
       return {
@@ -596,5 +493,37 @@ export class ManageComponent implements OnInit {
         attributes: []
       };
     }
+  }
+
+  /**
+   * Convert felt252 to string
+   */
+  private feltToString(felt: any): string {
+    if (typeof felt === 'string') {
+      if (felt.startsWith('0x')) {
+        const hex = felt.slice(2);
+        let str = '';
+        for (let i = 0; i < hex.length; i += 2) {
+          const charCode = parseInt(hex.substr(i, 2), 16);
+          if (charCode !== 0) {
+            str += String.fromCharCode(charCode);
+          }
+        }
+        return str;
+      }
+      return felt;
+    }
+    if (typeof felt === 'bigint') {
+      const hex = felt.toString(16);
+      let str = '';
+      for (let i = 0; i < hex.length; i += 2) {
+        const charCode = parseInt(hex.substr(i, 2), 16);
+        if (charCode !== 0) {
+          str += String.fromCharCode(charCode);
+        }
+      }
+      return str;
+    }
+    return String(felt);
   }
 }

@@ -1,63 +1,169 @@
 import { Injectable, signal } from '@angular/core';
-import init from '@web3-onboard/core';
-import injectedModule from '@web3-onboard/injected-wallets';
 import { Observable, of } from 'rxjs';
-import { createPublicClient, createWalletClient, http, formatEther, PublicClient, WalletClient, Chain, custom } from 'viem';
+import { Account, RpcProvider, Contract, uint256, CallData, constants } from 'starknet';
+import { CHAIN_ID, ChainIdType, RPC_URLS, CONTRACT_ADDRESSES, STARKNET_CHAIN_ID } from './address';
+
+// Starknet chain configuration
+export interface StarknetChain {
+  id: string;
+  name: string;
+  nativeCurrency: {
+    name: string;
+    symbol: string;
+    decimals: number;
+  };
+  rpcUrl: string;
+}
+
+// ERC20 ABI for balance checking (Starknet Cairo format)
+const ERC20_ABI = [
+  {
+    name: 'balanceOf',
+    type: 'function',
+    inputs: [{ name: 'account', type: 'felt' }],
+    outputs: [{ name: 'balance', type: 'Uint256' }],
+    stateMutability: 'view'
+  },
+  {
+    name: 'decimals',
+    type: 'function',
+    inputs: [],
+    outputs: [{ name: 'decimals', type: 'felt' }],
+    stateMutability: 'view'
+  }
+];
+
+// Wallet interface for Starknet wallets
+interface StarknetWallet {
+  id: string;
+  name: string;
+  icon: string;
+  account?: Account;
+  provider?: any;
+  selectedAddress?: string;
+  isConnected?: boolean;
+  enable: () => Promise<string[]>;
+  on: (event: string, callback: (...args: any[]) => void) => void;
+  off: (event: string, callback: (...args: any[]) => void) => void;
+}
 
 @Injectable({
   providedIn: 'root'
 })
 export class WalletService {
-  private web3Onboard: ReturnType<typeof init>;
-  private injected = injectedModule();
+  // Connected wallet object
+  private wallet: StarknetWallet | null = null;
+  private accountInstance: Account | null = null;
 
+  // Current chain ID
+  private currentChainId: ChainIdType = CHAIN_ID.MAINNET;
+
+  // Reactive signals for wallet state
   public walletAddress = signal<string | null>(null);
   public isConnected = signal<boolean>(false);
   public balance = signal<string>('0');
+  public chainId = signal<ChainIdType>(CHAIN_ID.MAINNET);
 
   constructor() {
-    this.web3Onboard = init({
-      wallets: [this.injected],
-      chains: [
-        {
-          id: '0x18623A6A54F3F',
-          token: 'ETH',
-          label: 'Yominet',
-          rpcUrl: 'https://jsonrpc-yominet-1.anvil.asia-southeast.initia.xyz/'
-        },
-        {
-          id: '0x4be439dcd8b3f',
-          token: 'Init',
-          label: 'Zaar',
-          rpcUrl: 'https://jsonrpc-zaar-mainnet-1.anvil.asia-southeast.initia.xyz/'
-        }
-      ],
-      accountCenter: {
-        desktop: {
-          enabled: false,
-        },
-        mobile: {
-          enabled: false,
-        }
-      },
-      connect: {
-        autoConnectLastWallet: true,
-      },
-      theme: 'dark'
-    });
+    // Check for previously connected wallet on initialization
+    this.checkExistingConnection();
   }
 
+  /**
+   * Check if there's an existing wallet connection
+   */
+  private async checkExistingConnection(): Promise<void> {
+    try {
+      // Check for injected Starknet wallets
+      const starknetWallets = await this.getAvailableWallets();
+      if (starknetWallets.length > 0) {
+        // Try to auto-connect to the first available wallet if it was previously connected
+        for (const wallet of starknetWallets) {
+          try {
+            if ((wallet as any).isConnected && (wallet as any).selectedAddress) {
+              this.wallet = wallet as StarknetWallet;
+              this.walletAddress.set((wallet as any).selectedAddress);
+              this.isConnected.set(true);
+              await this.detectChain();
+              await this.fetchBalance();
+              break;
+            }
+          } catch (e) {
+            // Continue to next wallet
+          }
+        }
+      }
+    } catch (error) {
+      console.log('No existing wallet connection found');
+    }
+  }
+
+  /**
+   * Get available Starknet wallets from the window object
+   */
+  private async getAvailableWallets(): Promise<any[]> {
+    const wallets: any[] = [];
+
+    // Check for common Starknet wallets
+    if (typeof window !== 'undefined') {
+      const win = window as any;
+
+      // ArgentX
+      if (win.starknet_argentX) {
+        wallets.push(win.starknet_argentX);
+      }
+
+      // Braavos
+      if (win.starknet_braavos) {
+        wallets.push(win.starknet_braavos);
+      }
+
+      // Generic starknet object (legacy)
+      if (win.starknet && !wallets.includes(win.starknet)) {
+        wallets.push(win.starknet);
+      }
+    }
+
+    return wallets;
+  }
+
+  /**
+   * Connect to a Starknet wallet (Argent X, Braavos, etc.)
+   * @returns Promise<boolean> - true if connection successful
+   */
   async connectWallet(): Promise<boolean> {
     try {
-      const wallets = await this.web3Onboard.connectWallet();
+      const wallets = await this.getAvailableWallets();
 
-      if (wallets[0]) {
-        const { accounts } = wallets[0];
-        this.walletAddress.set(accounts[0].address);
+      if (wallets.length === 0) {
+        console.error('No Starknet wallets detected. Please install Argent X or Braavos.');
+        return false;
+      }
+
+      // Use the first available wallet
+      const selectedWallet = wallets[0];
+
+      // Enable the wallet (request account access)
+      const accounts = await selectedWallet.enable();
+
+      if (accounts && accounts.length > 0) {
+        this.wallet = selectedWallet;
+        this.walletAddress.set(accounts[0]);
         this.isConnected.set(true);
+
+        // Set up the account instance
+        if (selectedWallet.account) {
+          this.accountInstance = selectedWallet.account as Account;
+        }
+
+        // Detect the current chain
+        await this.detectChain();
 
         // Fetch the balance after connecting
         await this.fetchBalance();
+
+        // Listen for account changes
+        this.setupEventListeners();
 
         return true;
       }
@@ -69,115 +175,264 @@ export class WalletService {
     }
   }
 
+  /**
+   * Disconnect the current wallet
+   */
   async disconnectWallet(): Promise<void> {
-    const [primaryWallet] = this.web3Onboard.state.get().wallets;
-    if (primaryWallet) {
-      await this.web3Onboard.disconnectWallet({ label: primaryWallet.label });
+    try {
+      this.wallet = null;
+      this.accountInstance = null;
       this.walletAddress.set(null);
       this.isConnected.set(false);
+      this.balance.set('0');
+    } catch (error) {
+      console.error('Error disconnecting wallet:', error);
     }
   }
 
+  /**
+   * Setup event listeners for account/network changes
+   */
+  private setupEventListeners(): void {
+    if (!this.wallet) return;
+
+    // Listen for account changes
+    this.wallet.on('accountsChanged', (accounts?: string[]) => {
+      if (accounts && accounts.length > 0) {
+        this.walletAddress.set(accounts[0]);
+        this.fetchBalance();
+      } else {
+        this.walletAddress.set(null);
+        this.isConnected.set(false);
+      }
+    });
+
+    // Listen for network changes
+    this.wallet.on('networkChanged', (network?: string) => {
+      console.log('Network changed:', network);
+      this.detectChain();
+      this.fetchBalance();
+    });
+  }
+
+  /**
+   * Detect the current chain from the wallet
+   */
+  private async detectChain(): Promise<void> {
+    if (!this.wallet) return;
+
+    try {
+      const provider = (this.wallet as any).provider;
+      if (provider && typeof provider.getChainId === 'function') {
+        const chainId = await provider.getChainId();
+        if (chainId === STARKNET_CHAIN_ID.MAINNET || chainId === constants.StarknetChainId.SN_MAIN) {
+          this.currentChainId = CHAIN_ID.MAINNET;
+        } else {
+          this.currentChainId = CHAIN_ID.SEPOLIA;
+        }
+      } else {
+        // Default to mainnet
+        this.currentChainId = CHAIN_ID.MAINNET;
+      }
+      this.chainId.set(this.currentChainId);
+    } catch (error) {
+      console.error('Error detecting chain:', error);
+      // Default to mainnet
+      this.currentChainId = CHAIN_ID.MAINNET;
+      this.chainId.set(this.currentChainId);
+    }
+  }
+
+  /**
+   * Get the connected wallet address as an Observable
+   * @returns Observable<string | null>
+   */
   getConnectedWallet(): Observable<string | null> {
     return of(this.walletAddress());
   }
 
   /**
    * Get the current chain configuration
-   * @returns The chain configuration object or null if not available
+   * @returns StarknetChain object with chain details
    */
-  private getCurrentChainConfig() {
-    const state = this.web3Onboard.state.get();
-    const [wallet] = state.wallets;
-    if (!wallet) return null;
-
-    const { chains } = wallet;
-    const chainId = chains[0].id;
-
-    return this.web3Onboard.state.get().chains.find(c => c.id === chainId);
-  }
-
-  /**
-   * Get the current chain as a viem Chain object
-   * @returns A viem Chain object or null if not available
-   */
-  getCurrentChain(): Chain | null {
-    const chainConfig = this.getCurrentChainConfig();
-    if (!chainConfig) return null;
-
+  getCurrentChain(): StarknetChain | null {
     return {
-      id: parseInt(chainConfig.id, 16),
-      name: chainConfig.label || 'Unknown Chain',
+      id: this.currentChainId,
+      name: this.currentChainId === CHAIN_ID.MAINNET ? 'Starknet Mainnet' : 'Starknet Sepolia',
       nativeCurrency: {
-        name: chainConfig.token || 'ETH',
-        symbol: chainConfig.token || 'ETH',
+        name: 'Ethereum',
+        symbol: 'ETH',
         decimals: 18
       },
-      rpcUrls: {
-        default: {
-          http: [chainConfig.rpcUrl || ''],
-        },
-      },
+      rpcUrl: RPC_URLS[this.currentChainId]
     };
   }
 
   /**
-   * Get a viem public client for the current chain
-   * @returns A viem PublicClient or null if not available
+   * Get an RPC provider for the current chain
+   * @returns RpcProvider instance
    */
-  getPublicClient(): PublicClient | null {
-    const chain = this.getCurrentChain();
-    if (!chain) return null;
-
-    return createPublicClient({
-      chain,
-      transport: http(),
+  getProvider(): RpcProvider {
+    return new RpcProvider({
+      nodeUrl: RPC_URLS[this.currentChainId]
     });
   }
 
   /**
-   * Get a viem wallet client for the current chain
-   * @returns A viem WalletClient or null if not available
+   * Get the Account object for signing transactions
+   * @returns Account object or null
    */
-  getWalletClient(): WalletClient | null {
-    const chain = this.getCurrentChain();
-    if (!chain || !this.walletAddress()) return null;
+  getAccount(): Account | null {
+    if (!this.wallet || !this.walletAddress()) return null;
 
-    const state = this.web3Onboard.state.get();
-    const [wallet] = state.wallets;
-    if (!wallet) return null;
+    // Return the cached account instance or create from wallet
+    if (this.accountInstance) {
+      return this.accountInstance;
+    }
 
-    // Get the provider from web3-onboard
-    const provider = wallet.provider;
-    if (!provider) return null;
+    // The wallet provides the account interface
+    if ((this.wallet as any).account) {
+      return (this.wallet as any).account as Account;
+    }
 
-    return createWalletClient({
-      account: this.walletAddress() as `0x${string}`,
-      chain,
-      transport: custom(provider)
-    });
+    return null;
   }
 
+  /**
+   * Get the current chain ID
+   * @returns ChainIdType
+   */
+  getCurrentChainId(): ChainIdType {
+    return this.currentChainId;
+  }
+
+  /**
+   * Fetch the ETH balance for the connected wallet
+   */
   async fetchBalance(): Promise<void> {
-    if (!this.walletAddress()) return;
+    if (!this.walletAddress()) {
+      this.balance.set('0');
+      return;
+    }
 
     try {
-      const publicClient = this.getPublicClient();
-      if (!publicClient) return;
+      const provider = this.getProvider();
+      const ethAddress = CONTRACT_ADDRESSES[this.currentChainId].ETH_TOKEN;
 
-      // Get the balance
-      const balanceWei = await publicClient.getBalance({
-        address: this.walletAddress() as `0x${string}`
-      });
+      // Create contract instance for ETH token
+      const ethContract = new Contract(ERC20_ABI, ethAddress, provider);
 
-      // Format the balance with 18 decimals
-      const formattedBalance = formatEther(balanceWei);
+      // Call balanceOf
+      const result = await ethContract['balanceOf'](this.walletAddress());
 
-      // Update the balance signal
+      // Convert Uint256 to BigInt and format
+      const balanceBigInt = uint256.uint256ToBN(result.balance);
+      const formattedBalance = this.formatEther(balanceBigInt);
+
       this.balance.set(formattedBalance);
     } catch (error) {
       console.error('Error fetching balance:', error);
       this.balance.set('0');
     }
+  }
+
+  /**
+   * Format wei to ether (18 decimals)
+   * @param wei BigInt value in wei
+   * @returns Formatted string
+   */
+  private formatEther(wei: bigint): string {
+    const divisor = BigInt(10 ** 18);
+    const integerPart = wei / divisor;
+    const fractionalPart = wei % divisor;
+
+    // Convert fractional part to string and pad with zeros
+    let fractionalStr = fractionalPart.toString().padStart(18, '0');
+
+    // Trim trailing zeros but keep at least 4 decimal places
+    fractionalStr = fractionalStr.replace(/0+$/, '');
+    if (fractionalStr.length < 4) {
+      fractionalStr = fractionalStr.padEnd(4, '0');
+    }
+
+    // Limit to 6 decimal places for display
+    fractionalStr = fractionalStr.slice(0, 6);
+
+    return `${integerPart}.${fractionalStr}`;
+  }
+
+  /**
+   * Execute a contract call (read-only)
+   * @param contractAddress The contract address
+   * @param abi The contract ABI
+   * @param functionName The function to call
+   * @param args The function arguments
+   * @returns Promise with the result
+   */
+  async callContract<T>(
+    contractAddress: string,
+    abi: any[],
+    functionName: string,
+    args: any[] = []
+  ): Promise<T> {
+    const provider = this.getProvider();
+    const contract = new Contract(abi, contractAddress, provider);
+    return await contract[functionName](...args);
+  }
+
+  /**
+   * Execute a contract transaction (write)
+   * @param contractAddress The contract address
+   * @param abi The contract ABI
+   * @param functionName The function to call
+   * @param args The function arguments
+   * @returns Promise with the transaction hash
+   */
+  async executeTransaction(
+    contractAddress: string,
+    abi: any[],
+    functionName: string,
+    args: any[] = []
+  ): Promise<string> {
+    const account = this.getAccount();
+    if (!account) {
+      throw new Error('No account available');
+    }
+
+    const provider = this.getProvider();
+    const contract = new Contract(abi, contractAddress, provider);
+    contract.connect(account);
+
+    const result = await contract[functionName](...args);
+    return result.transaction_hash;
+  }
+
+  /**
+   * Wait for a transaction to be confirmed
+   * @param txHash The transaction hash
+   */
+  async waitForTransaction(txHash: string): Promise<void> {
+    const provider = this.getProvider();
+    await provider.waitForTransaction(txHash);
+  }
+
+  /**
+   * Execute multiple calls in a single transaction
+   * @param calls Array of call objects
+   * @returns Promise with the transaction hash
+   */
+  async executeMulticall(calls: { contractAddress: string; entrypoint: string; calldata: any[] }[]): Promise<string> {
+    const account = this.getAccount();
+    if (!account) {
+      throw new Error('No account available');
+    }
+
+    const result = await account.execute(calls.map(call => ({
+      contractAddress: call.contractAddress,
+      entrypoint: call.entrypoint,
+      calldata: CallData.compile(call.calldata)
+    })));
+
+    return result.transaction_hash;
   }
 }

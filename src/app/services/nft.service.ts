@@ -1,8 +1,8 @@
 import { Injectable } from '@angular/core';
 import { Subject, BehaviorSubject } from 'rxjs';
 import { WalletService } from './wallet.service';
-import { Pair721 } from '../../abi/Pair721';
-import { PublicClient, WalletClient, Hash } from 'viem';
+import { Pair721ABI } from '../../abi/Pair721';
+import { uint256 } from 'starknet';
 
 // Transaction status enum
 export enum TransactionStatus {
@@ -11,6 +11,9 @@ export enum TransactionStatus {
   SUCCESS = 'success',
   ERROR = 'error'
 }
+
+// Starknet transaction hash type
+export type StarknetHash = string;
 
 // NFT transaction parameters interface
 export interface NFTTransactionParams {
@@ -22,7 +25,7 @@ export interface NFTTransactionParams {
 // Transaction result interface
 export interface TransactionResult {
   status: TransactionStatus;
-  hash?: Hash;
+  hash?: StarknetHash;
   error?: Error;
   pairAddress?: string;
 }
@@ -34,8 +37,8 @@ export class NFTService {
   // Transaction status subjects
   private transactionStatus = new BehaviorSubject<TransactionStatus>(TransactionStatus.IDLE);
   private transactionStarted = new Subject<NFTTransactionParams>();
-  private transactionPending = new Subject<Hash>();
-  private transactionSuccess = new Subject<Hash>();
+  private transactionPending = new Subject<StarknetHash>();
+  private transactionSuccess = new Subject<StarknetHash>();
   private transactionError = new Subject<Error>();
   private transactionComplete = new Subject<TransactionResult>();
 
@@ -62,7 +65,7 @@ export class NFTService {
       // Reset transaction status
       this.transactionStatus.next(TransactionStatus.PENDING);
       this.currentTransaction = params;
-      
+
       // Emit transaction started event
       this.transactionStarted.next(params);
 
@@ -73,10 +76,10 @@ export class NFTService {
         return { status: TransactionStatus.ERROR, error, pairAddress: params.pairAddress };
       }
 
-      // Get the wallet client
-      const walletClient = this.walletService.getWalletClient();
-      if (!walletClient) {
-        const error = new Error('No wallet client available');
+      // Get the account
+      const account = this.walletService.getAccount();
+      if (!account) {
+        const error = new Error('No wallet account available');
         this.handleTransactionError(error);
         return { status: TransactionStatus.ERROR, error, pairAddress: params.pairAddress };
       }
@@ -89,9 +92,8 @@ export class NFTService {
         return { status: TransactionStatus.ERROR, error, pairAddress: params.pairAddress };
       }
 
-      // Call swapTokenForSpecificNFTs on the pair contract
+      // Execute the swap transaction on Starknet
       const hash = await this.executeTransaction(
-        walletClient,
         params.pairAddress,
         params.nftIds[0],
         params.price,
@@ -101,78 +103,69 @@ export class NFTService {
       // Emit transaction pending event
       this.transactionPending.next(hash);
 
-      // Wait for the transaction to be mined
-      const publicClient = this.walletService.getPublicClient();
-      if (publicClient) {
-        await this.waitForTransaction(publicClient, hash);
-      }
+      // Wait for the transaction to be confirmed
+      await this.walletService.waitForTransaction(hash);
 
       // Update wallet balance
       await this.walletService.fetchBalance();
 
       // Emit transaction success event
       this.transactionSuccess.next(hash);
-      
+
       // Emit transaction complete event
-      const result = { 
-        status: TransactionStatus.SUCCESS, 
-        hash, 
-        pairAddress: params.pairAddress 
+      const result = {
+        status: TransactionStatus.SUCCESS,
+        hash,
+        pairAddress: params.pairAddress
       };
       this.transactionComplete.next(result);
       this.transactionStatus.next(TransactionStatus.SUCCESS);
-      
+
       return result;
     } catch (error) {
       this.handleTransactionError(error as Error);
-      return { 
-        status: TransactionStatus.ERROR, 
-        error: error as Error, 
-        pairAddress: params.pairAddress 
+      return {
+        status: TransactionStatus.ERROR,
+        error: error as Error,
+        pairAddress: params.pairAddress
       };
     }
   }
 
   /**
-   * Execute the NFT purchase transaction
-   * @param walletClient The wallet client
-   * @param pairAddress The pair address
+   * Execute the NFT purchase transaction on Starknet
+   * @param pairAddress The pair contract address
    * @param nftId The NFT ID to purchase
-   * @param price The price to pay
-   * @param walletAddress The wallet address
+   * @param price The price to pay (in u256)
+   * @param walletAddress The buyer's wallet address
    * @returns The transaction hash
    */
   private async executeTransaction(
-    walletClient: WalletClient,
     pairAddress: string,
     nftId: bigint,
     price: bigint,
     walletAddress: string
-  ): Promise<Hash> {
-    return await walletClient.writeContract({
-      address: pairAddress as `0x${string}`,
-      abi: Pair721,
-      functionName: 'swapTokenForSpecificNFTs',
-      args: [
-        [nftId], // Array with the NFT ID
-        price, // maxExpectedTokenInput (the price)
-        walletAddress as `0x${string}`, // nftRecipient (the caller)
-        false, // isRouter
-        '0x0000000000000000000000000000000000000000' as `0x${string}` // routerCaller
-      ],
-      value: price, // Send the price as the transaction value
-      chain: this.walletService.getCurrentChain(),
-      account: walletAddress as `0x${string}`
-    });
-  }
+  ): Promise<StarknetHash> {
+    // Convert values to Starknet format
+    // NFT IDs array - in Cairo this would be a Span<u256>
+    const nftIdU256 = uint256.bnToUint256(nftId);
 
-  /**
-   * Wait for a transaction to be mined
-   * @param publicClient The public client
-   * @param hash The transaction hash
-   */
-  private async waitForTransaction(publicClient: PublicClient, hash: Hash): Promise<void> {
-    await publicClient.waitForTransactionReceipt({ hash });
+    // Price as u256
+    const priceU256 = uint256.bnToUint256(price);
+
+    // Execute the transaction using the wallet service
+    return await this.walletService.executeTransaction(
+      pairAddress,
+      Pair721ABI,
+      'swap_token_for_specific_nfts',
+      [
+        [nftIdU256],           // nft_ids: Span<u256>
+        priceU256,             // max_expected_token_input: u256
+        walletAddress,         // nft_recipient: ContractAddress
+        false,                 // is_router: bool
+        '0x0'                  // router_caller: ContractAddress (zero address)
+      ]
+    );
   }
 
   /**

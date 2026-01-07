@@ -1,784 +1,236 @@
-export const Pair721 = [
-    {
-      "type": "function",
-      "name": "ROYALTY_ENGINE",
-      "inputs": [],
-      "outputs": [
-        {
-          "name": "",
-          "type": "address",
-          "internalType": "contract IRoyaltyEngineV1"
-        }
-      ],
-      "stateMutability": "view"
-    },
-    {
-      "type": "function",
-      "name": "bondingCurve",
-      "inputs": [],
-      "outputs": [
-        {
-          "name": "_bondingCurve",
-          "type": "address",
-          "internalType": "contract ICurve"
-        }
-      ],
-      "stateMutability": "pure"
-    },
-    {
-      "type": "function",
-      "name": "calculateRoyaltiesView",
-      "inputs": [
-        { "name": "assetId", "type": "uint256", "internalType": "uint256" },
-        { "name": "saleAmount", "type": "uint256", "internalType": "uint256" }
-      ],
-      "outputs": [
-        {
-          "name": "royaltyRecipients",
-          "type": "address[]",
-          "internalType": "address payable[]"
-        },
-        {
-          "name": "royaltyAmounts",
-          "type": "uint256[]",
-          "internalType": "uint256[]"
-        },
-        { "name": "royaltyTotal", "type": "uint256", "internalType": "uint256" }
-      ],
-      "stateMutability": "view"
-    },
-    {
-      "type": "function",
-      "name": "changeAssetRecipient",
-      "inputs": [
-        {
-          "name": "newRecipient",
-          "type": "address",
-          "internalType": "address payable"
-        }
-      ],
-      "outputs": [],
-      "stateMutability": "nonpayable"
-    },
-    {
-      "type": "function",
-      "name": "changeDelta",
-      "inputs": [
-        { "name": "newDelta", "type": "uint128", "internalType": "uint128" }
-      ],
-      "outputs": [],
-      "stateMutability": "nonpayable"
-    },
-    {
-      "type": "function",
-      "name": "changeFee",
-      "inputs": [
-        { "name": "newFee", "type": "uint96", "internalType": "uint96" }
-      ],
-      "outputs": [],
-      "stateMutability": "nonpayable"
-    },
-    {
-      "type": "function",
-      "name": "changeReferralAddress",
-      "inputs": [
-        { "name": "newReferral", "type": "address", "internalType": "address" }
-      ],
-      "outputs": [],
-      "stateMutability": "nonpayable"
-    },
-    {
-      "type": "function",
-      "name": "changeSpotPrice",
-      "inputs": [
-        { "name": "newSpotPrice", "type": "uint128", "internalType": "uint128" }
-      ],
-      "outputs": [],
-      "stateMutability": "nonpayable"
-    },
-    {
-      "type": "function",
-      "name": "delta",
-      "inputs": [],
-      "outputs": [{ "name": "", "type": "uint128", "internalType": "uint128" }],
-      "stateMutability": "view"
-    },
-    {
-      "type": "function",
-      "name": "factory",
-      "inputs": [],
-      "outputs": [
-        {
-          "name": "_factory",
-          "type": "address",
-          "internalType": "contract ILSSVMPairFactoryLike"
-        }
-      ],
-      "stateMutability": "pure"
-    },
-    {
-      "type": "function",
-      "name": "fee",
-      "inputs": [],
-      "outputs": [{ "name": "", "type": "uint96", "internalType": "uint96" }],
-      "stateMutability": "view"
-    },
-    {
-      "type": "function",
-      "name": "getAllIds",
-      "inputs": [],
-      "outputs": [
-        { "name": "ids", "type": "uint256[]", "internalType": "uint256[]" }
-      ],
-      "stateMutability": "view"
-    },
-    {
-      "type": "function",
-      "name": "getAssetRecipient",
-      "inputs": [],
-      "outputs": [
-        { "name": "", "type": "address", "internalType": "address payable" }
-      ],
-      "stateMutability": "view"
-    },
-    {
-      "type": "function",
-      "name": "getBuyNFTQuote",
-      "inputs": [
-        { "name": "assetId", "type": "uint256", "internalType": "uint256" },
-        { "name": "numNFTs", "type": "uint256", "internalType": "uint256" }
-      ],
-      "outputs": [
-        {
-          "name": "error",
-          "type": "uint8",
-          "internalType": "enum CurveErrorCodes.Error"
-        },
-        {
-          "name": "newSpotPrice",
-          "type": "uint256",
-          "internalType": "uint256"
-        },
-        { "name": "newDelta", "type": "uint256", "internalType": "uint256" },
-        { "name": "inputAmount", "type": "uint256", "internalType": "uint256" },
-        { "name": "protocolFee", "type": "uint256", "internalType": "uint256" },
-        {
-          "name": "royaltyAmount",
-          "type": "uint256",
-          "internalType": "uint256"
-        }
-      ],
-      "stateMutability": "view"
-    },
-    {
-      "type": "function",
-      "name": "getFeeRecipient",
-      "inputs": [],
-      "outputs": [
-        {
-          "name": "_feeRecipient",
-          "type": "address",
-          "internalType": "address payable"
-        }
-      ],
-      "stateMutability": "view"
-    },
-    {
-      "type": "function",
-      "name": "getIds",
-      "inputs": [
-        { "name": "start", "type": "uint256", "internalType": "uint256" },
-        { "name": "end", "type": "uint256", "internalType": "uint256" }
-      ],
-      "outputs": [
-        { "name": "ids", "type": "uint256[]", "internalType": "uint256[]" }
-      ],
-      "stateMutability": "view"
-    },
-    {
-      "type": "function",
-      "name": "getSellNFTQuote",
-      "inputs": [
-        { "name": "assetId", "type": "uint256", "internalType": "uint256" },
-        { "name": "numNFTs", "type": "uint256", "internalType": "uint256" }
-      ],
-      "outputs": [
-        {
-          "name": "error",
-          "type": "uint8",
-          "internalType": "enum CurveErrorCodes.Error"
-        },
-        {
-          "name": "newSpotPrice",
-          "type": "uint256",
-          "internalType": "uint256"
-        },
-        { "name": "newDelta", "type": "uint256", "internalType": "uint256" },
-        {
-          "name": "outputAmount",
-          "type": "uint256",
-          "internalType": "uint256"
-        },
-        { "name": "protocolFee", "type": "uint256", "internalType": "uint256" },
-        {
-          "name": "royaltyAmount",
-          "type": "uint256",
-          "internalType": "uint256"
-        }
-      ],
-      "stateMutability": "view"
-    },
-    {
-      "type": "function",
-      "name": "hasId",
-      "inputs": [
-        { "name": "id", "type": "uint256", "internalType": "uint256" }
-      ],
-      "outputs": [{ "name": "", "type": "bool", "internalType": "bool" }],
-      "stateMutability": "view"
-    },
-    {
-      "type": "function",
-      "name": "hook",
-      "inputs": [],
-      "outputs": [
-        { "name": "", "type": "address", "internalType": "contract IPairHooks" }
-      ],
-      "stateMutability": "view"
-    },
-    {
-      "type": "function",
-      "name": "initialize",
-      "inputs": [
-        { "name": "_owner", "type": "address", "internalType": "address" },
-        {
-          "name": "_assetRecipient",
-          "type": "address",
-          "internalType": "address payable"
-        },
-        { "name": "_delta", "type": "uint128", "internalType": "uint128" },
-        { "name": "_fee", "type": "uint96", "internalType": "uint96" },
-        { "name": "_spotPrice", "type": "uint128", "internalType": "uint128" },
-        {
-          "name": "_hookAddress",
-          "type": "address",
-          "internalType": "address"
-        },
-        {
-          "name": "_referralAddress",
-          "type": "address",
-          "internalType": "address"
-        }
-      ],
-      "outputs": [],
-      "stateMutability": "nonpayable"
-    },
-    {
-      "type": "function",
-      "name": "multicall",
-      "inputs": [
-        { "name": "calls", "type": "bytes[]", "internalType": "bytes[]" },
-        { "name": "revertOnFail", "type": "bool", "internalType": "bool" }
-      ],
-      "outputs": [],
-      "stateMutability": "nonpayable"
-    },
-    {
-      "type": "function",
-      "name": "nft",
-      "inputs": [],
-      "outputs": [
-        { "name": "_nft", "type": "address", "internalType": "address" }
-      ],
-      "stateMutability": "pure"
-    },
-    {
-      "type": "function",
-      "name": "numIdsHeld",
-      "inputs": [],
-      "outputs": [{ "name": "", "type": "uint256", "internalType": "uint256" }],
-      "stateMutability": "view"
-    },
-    {
-      "type": "function",
-      "name": "onERC1155BatchReceived",
-      "inputs": [
-        { "name": "", "type": "address", "internalType": "address" },
-        { "name": "", "type": "address", "internalType": "address" },
-        { "name": "", "type": "uint256[]", "internalType": "uint256[]" },
-        { "name": "", "type": "uint256[]", "internalType": "uint256[]" },
-        { "name": "", "type": "bytes", "internalType": "bytes" }
-      ],
-      "outputs": [{ "name": "", "type": "bytes4", "internalType": "bytes4" }],
-      "stateMutability": "nonpayable"
-    },
-    {
-      "type": "function",
-      "name": "onERC1155Received",
-      "inputs": [
-        { "name": "", "type": "address", "internalType": "address" },
-        { "name": "", "type": "address", "internalType": "address" },
-        { "name": "", "type": "uint256", "internalType": "uint256" },
-        { "name": "", "type": "uint256", "internalType": "uint256" },
-        { "name": "", "type": "bytes", "internalType": "bytes" }
-      ],
-      "outputs": [{ "name": "", "type": "bytes4", "internalType": "bytes4" }],
-      "stateMutability": "nonpayable"
-    },
-    {
-      "type": "function",
-      "name": "onERC721Received",
-      "inputs": [
-        { "name": "", "type": "address", "internalType": "address" },
-        { "name": "", "type": "address", "internalType": "address" },
-        { "name": "", "type": "uint256", "internalType": "uint256" },
-        { "name": "", "type": "bytes", "internalType": "bytes" }
-      ],
-      "outputs": [{ "name": "", "type": "bytes4", "internalType": "bytes4" }],
-      "stateMutability": "nonpayable"
-    },
-    {
-      "type": "function",
-      "name": "owner",
-      "inputs": [],
-      "outputs": [{ "name": "", "type": "address", "internalType": "address" }],
-      "stateMutability": "view"
-    },
-    {
-      "type": "function",
-      "name": "pairVariant",
-      "inputs": [],
-      "outputs": [
-        {
-          "name": "",
-          "type": "uint8",
-          "internalType": "enum ILSSVMPairFactoryLike.PairVariant"
-        }
-      ],
-      "stateMutability": "pure"
-    },
-    {
-      "type": "function",
-      "name": "poolType",
-      "inputs": [],
-      "outputs": [
-        {
-          "name": "_poolType",
-          "type": "uint8",
-          "internalType": "enum LSSVMPair.PoolType"
-        }
-      ],
-      "stateMutability": "pure"
-    },
-    {
-      "type": "function",
-      "name": "propertyChecker",
-      "inputs": [],
-      "outputs": [
-        {
-          "name": "_propertyChecker",
-          "type": "address",
-          "internalType": "address"
-        }
-      ],
-      "stateMutability": "pure"
-    },
-    {
-      "type": "function",
-      "name": "referralAddress",
-      "inputs": [],
-      "outputs": [{ "name": "", "type": "address", "internalType": "address" }],
-      "stateMutability": "view"
-    },
-    {
-      "type": "function",
-      "name": "spotPrice",
-      "inputs": [],
-      "outputs": [{ "name": "", "type": "uint128", "internalType": "uint128" }],
-      "stateMutability": "view"
-    },
-    {
-      "type": "function",
-      "name": "supportsInterface",
-      "inputs": [
-        { "name": "interfaceId", "type": "bytes4", "internalType": "bytes4" }
-      ],
-      "outputs": [{ "name": "", "type": "bool", "internalType": "bool" }],
-      "stateMutability": "view"
-    },
-    {
-      "type": "function",
-      "name": "swapNFTsForToken",
-      "inputs": [
-        { "name": "nftIds", "type": "uint256[]", "internalType": "uint256[]" },
-        {
-          "name": "minExpectedTokenOutput",
-          "type": "uint256",
-          "internalType": "uint256"
-        },
-        {
-          "name": "tokenRecipient",
-          "type": "address",
-          "internalType": "address payable"
-        },
-        { "name": "isRouter", "type": "bool", "internalType": "bool" },
-        {
-          "name": "routerCaller",
-          "type": "address",
-          "internalType": "address"
-        },
-        {
-          "name": "propertyCheckerParams",
-          "type": "bytes",
-          "internalType": "bytes"
-        }
-      ],
-      "outputs": [
-        { "name": "outputAmount", "type": "uint256", "internalType": "uint256" }
-      ],
-      "stateMutability": "nonpayable"
-    },
-    {
-      "type": "function",
-      "name": "swapNFTsForToken",
-      "inputs": [
-        { "name": "nftIds", "type": "uint256[]", "internalType": "uint256[]" },
-        {
-          "name": "minExpectedTokenOutput",
-          "type": "uint256",
-          "internalType": "uint256"
-        },
-        {
-          "name": "tokenRecipient",
-          "type": "address",
-          "internalType": "address payable"
-        },
-        { "name": "isRouter", "type": "bool", "internalType": "bool" },
-        { "name": "routerCaller", "type": "address", "internalType": "address" }
-      ],
-      "outputs": [
-        { "name": "outputAmount", "type": "uint256", "internalType": "uint256" }
-      ],
-      "stateMutability": "nonpayable"
-    },
-    {
-      "type": "function",
-      "name": "swapTokenForSpecificNFTs",
-      "inputs": [
-        { "name": "nftIds", "type": "uint256[]", "internalType": "uint256[]" },
-        {
-          "name": "maxExpectedTokenInput",
-          "type": "uint256",
-          "internalType": "uint256"
-        },
-        {
-          "name": "nftRecipient",
-          "type": "address",
-          "internalType": "address"
-        },
-        { "name": "isRouter", "type": "bool", "internalType": "bool" },
-        { "name": "routerCaller", "type": "address", "internalType": "address" }
-      ],
-      "outputs": [{ "name": "", "type": "uint256", "internalType": "uint256" }],
-      "stateMutability": "payable"
-    },
-    {
-      "type": "function",
-      "name": "syncNFTIds",
-      "inputs": [
-        { "name": "ids", "type": "uint256[]", "internalType": "uint256[]" }
-      ],
-      "outputs": [],
-      "stateMutability": "nonpayable"
-    },
-    {
-      "type": "function",
-      "name": "transferOwnership",
-      "inputs": [
-        { "name": "newOwner", "type": "address", "internalType": "address" },
-        { "name": "data", "type": "bytes", "internalType": "bytes" }
-      ],
-      "outputs": [],
-      "stateMutability": "payable"
-    },
-    {
-      "type": "function",
-      "name": "withdrawERC1155",
-      "inputs": [
-        { "name": "a", "type": "address", "internalType": "contract IERC1155" },
-        { "name": "ids", "type": "uint256[]", "internalType": "uint256[]" },
-        { "name": "amounts", "type": "uint256[]", "internalType": "uint256[]" }
-      ],
-      "outputs": [],
-      "stateMutability": "nonpayable"
-    },
-    {
-      "type": "function",
-      "name": "withdrawERC20",
-      "inputs": [
-        { "name": "a", "type": "address", "internalType": "contract ERC20" },
-        { "name": "amount", "type": "uint256", "internalType": "uint256" }
-      ],
-      "outputs": [],
-      "stateMutability": "nonpayable"
-    },
-    {
-      "type": "function",
-      "name": "withdrawERC721",
-      "inputs": [
-        { "name": "a", "type": "address", "internalType": "contract IERC721" },
-        { "name": "nftIds", "type": "uint256[]", "internalType": "uint256[]" }
-      ],
-      "outputs": [],
-      "stateMutability": "nonpayable"
-    },
-    {
-      "type": "event",
-      "name": "DeltaUpdate",
-      "inputs": [
-        {
-          "name": "newDelta",
-          "type": "uint128",
-          "indexed": false,
-          "internalType": "uint128"
-        }
-      ],
-      "anonymous": false
-    },
-    {
-      "type": "event",
-      "name": "FeeUpdate",
-      "inputs": [
-        {
-          "name": "newFee",
-          "type": "uint96",
-          "indexed": false,
-          "internalType": "uint96"
-        }
-      ],
-      "anonymous": false
-    },
-    {
-      "type": "event",
-      "name": "NFTWithdrawal",
-      "inputs": [
-        {
-          "name": "ids",
-          "type": "uint256[]",
-          "indexed": false,
-          "internalType": "uint256[]"
-        }
-      ],
-      "anonymous": false
-    },
-    {
-      "type": "event",
-      "name": "NFTWithdrawal",
-      "inputs": [
-        {
-          "name": "numNFTs",
-          "type": "uint256",
-          "indexed": false,
-          "internalType": "uint256"
-        }
-      ],
-      "anonymous": false
-    },
-    {
-      "type": "event",
-      "name": "OwnershipTransferred",
-      "inputs": [
-        {
-          "name": "newOwner",
-          "type": "address",
-          "indexed": true,
-          "internalType": "address"
-        }
-      ],
-      "anonymous": false
-    },
-    {
-      "type": "event",
-      "name": "SpotPriceUpdate",
-      "inputs": [
-        {
-          "name": "newSpotPrice",
-          "type": "uint128",
-          "indexed": false,
-          "internalType": "uint128"
-        }
-      ],
-      "anonymous": false
-    },
-    {
-      "type": "event",
-      "name": "SwapNFTInPair",
-      "inputs": [
-        {
-          "name": "amountOut",
-          "type": "uint256",
-          "indexed": false,
-          "internalType": "uint256"
-        },
-        {
-          "name": "ids",
-          "type": "uint256[]",
-          "indexed": false,
-          "internalType": "uint256[]"
-        },
-        {
-          "name": "royaltyAmount",
-          "type": "uint256",
-          "indexed": false,
-          "internalType": "uint256"
-        }
-      ],
-      "anonymous": false
-    },
-    {
-      "type": "event",
-      "name": "SwapNFTInPair",
-      "inputs": [
-        {
-          "name": "amountOut",
-          "type": "uint256",
-          "indexed": false,
-          "internalType": "uint256"
-        },
-        {
-          "name": "numNFTs",
-          "type": "uint256",
-          "indexed": false,
-          "internalType": "uint256"
-        },
-        {
-          "name": "royaltyAmount",
-          "type": "uint256",
-          "indexed": false,
-          "internalType": "uint256"
-        }
-      ],
-      "anonymous": false
-    },
-    {
-      "type": "event",
-      "name": "SwapNFTOutPair",
-      "inputs": [
-        {
-          "name": "amountIn",
-          "type": "uint256",
-          "indexed": false,
-          "internalType": "uint256"
-        },
-        {
-          "name": "ids",
-          "type": "uint256[]",
-          "indexed": false,
-          "internalType": "uint256[]"
-        },
-        {
-          "name": "royaltyAmount",
-          "type": "uint256",
-          "indexed": false,
-          "internalType": "uint256"
-        }
-      ],
-      "anonymous": false
-    },
-    {
-      "type": "event",
-      "name": "SwapNFTOutPair",
-      "inputs": [
-        {
-          "name": "amountIn",
-          "type": "uint256",
-          "indexed": false,
-          "internalType": "uint256"
-        },
-        {
-          "name": "numNFTs",
-          "type": "uint256",
-          "indexed": false,
-          "internalType": "uint256"
-        },
-        {
-          "name": "royaltyAmount",
-          "type": "uint256",
-          "indexed": false,
-          "internalType": "uint256"
-        }
-      ],
-      "anonymous": false
-    },
-    {
-      "type": "event",
-      "name": "TokenDeposit",
-      "inputs": [
-        {
-          "name": "amount",
-          "type": "uint256",
-          "indexed": false,
-          "internalType": "uint256"
-        }
-      ],
-      "anonymous": false
-    },
-    {
-      "type": "event",
-      "name": "TokenWithdrawal",
-      "inputs": [
-        {
-          "name": "amount",
-          "type": "uint256",
-          "indexed": false,
-          "internalType": "uint256"
-        }
-      ],
-      "anonymous": false
-    },
-    {
-      "type": "error",
-      "name": "LSSVMPairERC721__NeedPropertyChecking",
-      "inputs": []
-    },
-    {
-      "type": "error",
-      "name": "LSSVMPairERC721__PropertyCheckFailed",
-      "inputs": []
-    },
-    { "type": "error", "name": "LSSVMPair__AlreadyInitialized", "inputs": [] },
-    {
-      "type": "error",
-      "name": "LSSVMPair__BondingCurveError",
-      "inputs": [
-        {
-          "name": "error",
-          "type": "uint8",
-          "internalType": "enum CurveErrorCodes.Error"
-        }
-      ]
-    },
-    {
-      "type": "error",
-      "name": "LSSVMPair__DemandedInputTooLarge",
-      "inputs": []
-    },
-    { "type": "error", "name": "LSSVMPair__FunctionNotAllowed", "inputs": [] },
-    { "type": "error", "name": "LSSVMPair__InvalidDelta", "inputs": [] },
-    { "type": "error", "name": "LSSVMPair__InvalidSpotPrice", "inputs": [] },
-    { "type": "error", "name": "LSSVMPair__NftNotTransferred", "inputs": [] },
-    {
-      "type": "error",
-      "name": "LSSVMPair__NonTradePoolWithTradeFee",
-      "inputs": []
-    },
-    { "type": "error", "name": "LSSVMPair__NotRouter", "inputs": [] },
-    { "type": "error", "name": "LSSVMPair__OutputTooSmall", "inputs": [] },
-    { "type": "error", "name": "LSSVMPair__RoyaltyTooLarge", "inputs": [] },
-    { "type": "error", "name": "LSSVMPair__TargetNotAllowed", "inputs": [] },
-    { "type": "error", "name": "LSSVMPair__TradeFeeTooLarge", "inputs": [] },
-    { "type": "error", "name": "LSSVMPair__WrongPoolType", "inputs": [] },
-    { "type": "error", "name": "LSSVMPair__ZeroSwapAmount", "inputs": [] },
-    { "type": "error", "name": "Ownable_NewOwnerZeroAddress", "inputs": [] },
-    { "type": "error", "name": "Ownable_NotOwner", "inputs": [] }
-  ] as const;
+/**
+ * Starknet ABI for Pair721 contract (Cairo format)
+ * This is a placeholder ABI - replace with actual deployed contract ABI
+ *
+ * Note: Starknet ABIs use snake_case for function names
+ * and different type representations than EVM ABIs
+ */
+export const Pair721ABI = [
+  // View functions
+  {
+    name: 'get_all_ids',
+    type: 'function',
+    inputs: [],
+    outputs: [{ name: 'ids', type: 'Array<u256>' }],
+    state_mutability: 'view'
+  },
+  {
+    name: 'get_buy_nft_quote',
+    type: 'function',
+    inputs: [
+      { name: 'asset_id', type: 'u256' },
+      { name: 'num_nfts', type: 'u256' }
+    ],
+    outputs: [
+      { name: 'error', type: 'u8' },
+      { name: 'new_spot_price', type: 'u256' },
+      { name: 'new_delta', type: 'u256' },
+      { name: 'input_amount', type: 'u256' },
+      { name: 'protocol_fee', type: 'u256' },
+      { name: 'royalty_amount', type: 'u256' }
+    ],
+    state_mutability: 'view'
+  },
+  {
+    name: 'get_sell_nft_quote',
+    type: 'function',
+    inputs: [
+      { name: 'asset_id', type: 'u256' },
+      { name: 'num_nfts', type: 'u256' }
+    ],
+    outputs: [
+      { name: 'error', type: 'u8' },
+      { name: 'new_spot_price', type: 'u256' },
+      { name: 'new_delta', type: 'u256' },
+      { name: 'output_amount', type: 'u256' },
+      { name: 'protocol_fee', type: 'u256' },
+      { name: 'royalty_amount', type: 'u256' }
+    ],
+    state_mutability: 'view'
+  },
+  {
+    name: 'nft',
+    type: 'function',
+    inputs: [],
+    outputs: [{ name: 'nft_address', type: 'ContractAddress' }],
+    state_mutability: 'view'
+  },
+  {
+    name: 'owner',
+    type: 'function',
+    inputs: [],
+    outputs: [{ name: 'owner', type: 'ContractAddress' }],
+    state_mutability: 'view'
+  },
+  {
+    name: 'spot_price',
+    type: 'function',
+    inputs: [],
+    outputs: [{ name: 'price', type: 'u128' }],
+    state_mutability: 'view'
+  },
+  {
+    name: 'delta',
+    type: 'function',
+    inputs: [],
+    outputs: [{ name: 'delta', type: 'u128' }],
+    state_mutability: 'view'
+  },
+  {
+    name: 'fee',
+    type: 'function',
+    inputs: [],
+    outputs: [{ name: 'fee', type: 'u128' }],
+    state_mutability: 'view'
+  },
+  {
+    name: 'bonding_curve',
+    type: 'function',
+    inputs: [],
+    outputs: [{ name: 'curve', type: 'ContractAddress' }],
+    state_mutability: 'view'
+  },
+  {
+    name: 'factory',
+    type: 'function',
+    inputs: [],
+    outputs: [{ name: 'factory', type: 'ContractAddress' }],
+    state_mutability: 'view'
+  },
+  {
+    name: 'pool_type',
+    type: 'function',
+    inputs: [],
+    outputs: [{ name: 'pool_type', type: 'u8' }],
+    state_mutability: 'view'
+  },
+  {
+    name: 'num_ids_held',
+    type: 'function',
+    inputs: [],
+    outputs: [{ name: 'count', type: 'u256' }],
+    state_mutability: 'view'
+  },
+  {
+    name: 'has_id',
+    type: 'function',
+    inputs: [{ name: 'id', type: 'u256' }],
+    outputs: [{ name: 'has', type: 'bool' }],
+    state_mutability: 'view'
+  },
+
+  // External functions (state-changing)
+  {
+    name: 'swap_token_for_specific_nfts',
+    type: 'function',
+    inputs: [
+      { name: 'nft_ids', type: 'Array<u256>' },
+      { name: 'max_expected_token_input', type: 'u256' },
+      { name: 'nft_recipient', type: 'ContractAddress' },
+      { name: 'is_router', type: 'bool' },
+      { name: 'router_caller', type: 'ContractAddress' }
+    ],
+    outputs: [{ name: 'input_amount', type: 'u256' }],
+    state_mutability: 'external'
+  },
+  {
+    name: 'swap_nfts_for_token',
+    type: 'function',
+    inputs: [
+      { name: 'nft_ids', type: 'Array<u256>' },
+      { name: 'min_expected_token_output', type: 'u256' },
+      { name: 'token_recipient', type: 'ContractAddress' },
+      { name: 'is_router', type: 'bool' },
+      { name: 'router_caller', type: 'ContractAddress' }
+    ],
+    outputs: [{ name: 'output_amount', type: 'u256' }],
+    state_mutability: 'external'
+  },
+  {
+    name: 'withdraw_erc721',
+    type: 'function',
+    inputs: [
+      { name: 'nft_address', type: 'ContractAddress' },
+      { name: 'nft_ids', type: 'Array<u256>' }
+    ],
+    outputs: [],
+    state_mutability: 'external'
+  },
+  {
+    name: 'change_spot_price',
+    type: 'function',
+    inputs: [{ name: 'new_spot_price', type: 'u128' }],
+    outputs: [],
+    state_mutability: 'external'
+  },
+  {
+    name: 'change_delta',
+    type: 'function',
+    inputs: [{ name: 'new_delta', type: 'u128' }],
+    outputs: [],
+    state_mutability: 'external'
+  },
+  {
+    name: 'change_fee',
+    type: 'function',
+    inputs: [{ name: 'new_fee', type: 'u128' }],
+    outputs: [],
+    state_mutability: 'external'
+  },
+  {
+    name: 'transfer_ownership',
+    type: 'function',
+    inputs: [{ name: 'new_owner', type: 'ContractAddress' }],
+    outputs: [],
+    state_mutability: 'external'
+  },
+
+  // Events
+  {
+    name: 'SwapNFTOutPair',
+    type: 'event',
+    keys: [],
+    data: [
+      { name: 'amount_in', type: 'u256' },
+      { name: 'ids', type: 'Array<u256>' },
+      { name: 'royalty_amount', type: 'u256' }
+    ]
+  },
+  {
+    name: 'SwapNFTInPair',
+    type: 'event',
+    keys: [],
+    data: [
+      { name: 'amount_out', type: 'u256' },
+      { name: 'ids', type: 'Array<u256>' },
+      { name: 'royalty_amount', type: 'u256' }
+    ]
+  },
+  {
+    name: 'SpotPriceUpdate',
+    type: 'event',
+    keys: [],
+    data: [{ name: 'new_spot_price', type: 'u128' }]
+  },
+  {
+    name: 'DeltaUpdate',
+    type: 'event',
+    keys: [],
+    data: [{ name: 'new_delta', type: 'u128' }]
+  },
+  {
+    name: 'FeeUpdate',
+    type: 'event',
+    keys: [],
+    data: [{ name: 'new_fee', type: 'u128' }]
+  },
+  {
+    name: 'OwnershipTransferred',
+    type: 'event',
+    keys: [{ name: 'new_owner', type: 'ContractAddress' }],
+    data: []
+  }
+];
+
+// Export the old name for backward compatibility
+export const Pair721 = Pair721ABI;
