@@ -43,12 +43,18 @@ export function feltToString(felt: bigint | string): string {
 /**
  * Format a bigint price to a human-readable string
  * @param price The price as a bigint (in wei, 18 decimals)
- * @param decimals The number of decimals (default: 18)
+ * @param decimals The number of decimals (default: 18, max: 78 for uint256)
  * @returns Formatted price string
  */
 export function formatPrice(price: bigint, decimals: number = 18): string {
+  // Validate decimals to prevent RangeError from 10 ** largeNumber
+  if (!Number.isFinite(decimals) || !Number.isInteger(decimals) || decimals < 0 || decimals > 78) {
+    console.error('formatPrice: decimals must be an integer between 0 and 78, got:', decimals);
+    return '0.00';
+  }
+
   try {
-    const divisor = BigInt(10 ** decimals);
+    const divisor = BigInt(10) ** BigInt(decimals);
     const integerPart = price / divisor;
     const fractionalPart = price % divisor;
 
@@ -76,11 +82,17 @@ export function formatPrice(price: bigint, decimals: number = 18): string {
 /**
  * Format a BigInt value with decimals to a human-readable string
  * @param value The value as a bigint
- * @param decimals The number of decimals
+ * @param decimals The number of decimals (max: 78 for uint256)
  * @returns Formatted string
  */
 export function formatUnits(value: bigint, decimals: number): string {
-  const divisor = BigInt(10 ** decimals);
+  // Validate decimals to prevent RangeError
+  if (!Number.isFinite(decimals) || !Number.isInteger(decimals) || decimals < 0 || decimals > 78) {
+    console.error('formatUnits: decimals must be an integer between 0 and 78, got:', decimals);
+    return '0';
+  }
+
+  const divisor = BigInt(10) ** BigInt(decimals);
   const integerPart = value / divisor;
   const fractionalPart = value % divisor;
 
@@ -100,17 +112,35 @@ export function formatUnits(value: bigint, decimals: number): string {
 /**
  * Parse a decimal string value to bigint with specified decimals
  * @param value The string value (e.g., "1.5")
- * @param decimals The number of decimals
+ * @param decimals The number of decimals (max: 78 for uint256)
  * @returns The value as bigint
+ * @throws Error if value format is invalid
  */
 export function parseUnits(value: string, decimals: number): bigint {
-  // Handle empty or invalid input
+  // Validate decimals
+  if (!Number.isFinite(decimals) || !Number.isInteger(decimals) || decimals < 0 || decimals > 78) {
+    throw new Error(`parseUnits: decimals must be an integer between 0 and 78, got: ${decimals}`);
+  }
+
+  // Handle empty input
   if (!value || value.trim() === '') {
     return 0n;
   }
 
+  const trimmed = value.trim();
+
+  // Validate input format: optional negative sign, digits, optional decimal point with digits
+  // Allows: "123", "123.456", ".456", "0.456", "-123.456"
+  if (!/^-?\d*\.?\d+$/.test(trimmed)) {
+    throw new Error(`parseUnits: invalid number format: "${value}"`);
+  }
+
+  // Handle negative numbers
+  const isNegative = trimmed.startsWith('-');
+  const absoluteValue = isNegative ? trimmed.slice(1) : trimmed;
+
   // Split into integer and fractional parts
-  const parts = value.split('.');
+  const parts = absoluteValue.split('.');
   const integerPart = parts[0] || '0';
   let fractionalPart = parts[1] || '';
 
@@ -123,5 +153,7 @@ export function parseUnits(value: string, decimals: number): bigint {
 
   // Combine and convert to bigint
   const combined = integerPart + fractionalPart;
-  return BigInt(combined);
+  const result = BigInt(combined);
+
+  return isNegative ? -result : result;
 }
