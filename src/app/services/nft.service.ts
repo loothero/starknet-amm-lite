@@ -1,4 +1,6 @@
 import { Injectable, signal, computed } from '@angular/core';
+import { toObservable } from '@angular/core/rxjs-interop';
+import { Observable } from 'rxjs';
 import { WalletService } from './wallet.service';
 import { Pair721ABI } from '../../abi/Pair721';
 import { uint256 } from 'starknet';
@@ -53,16 +55,21 @@ export class NFTService {
   public readonly isError = computed(() => this._transactionStatus() === TransactionStatus.ERROR);
   public readonly isIdle = computed(() => this._transactionStatus() === TransactionStatus.IDLE);
 
-  // Legacy observable for backward compatibility (deprecated, use signals instead)
-  public get transactionStatus$() {
-    console.warn('transactionStatus$ is deprecated. Use transactionStatus signal instead.');
-    return {
-      subscribe: (callback: (status: TransactionStatus) => void) => {
-        // Return a mock subscription that immediately calls with current value
-        callback(this._transactionStatus());
-        return { unsubscribe: () => {} };
-      }
-    };
+  // Observable created from signal for backward compatibility
+  // toObservable must be called in injection context (class property initializer)
+  private readonly _transactionStatus$ = toObservable(this._transactionStatus);
+  private _deprecationWarned = false;
+
+  /**
+   * Legacy observable for backward compatibility
+   * @deprecated Use transactionStatus signal instead
+   */
+  public get transactionStatus$(): Observable<TransactionStatus> {
+    if (!this._deprecationWarned) {
+      console.warn('transactionStatus$ is deprecated. Use transactionStatus signal instead.');
+      this._deprecationWarned = true;
+    }
+    return this._transactionStatus$;
   }
 
   constructor(private walletService: WalletService) {}

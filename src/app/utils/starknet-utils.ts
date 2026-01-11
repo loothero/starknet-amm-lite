@@ -16,7 +16,7 @@ export function feltToString(felt: bigint | string): string {
       const hex = felt.slice(2);
       let str = '';
       for (let i = 0; i < hex.length; i += 2) {
-        const charCode = parseInt(hex.substr(i, 2), 16);
+        const charCode = parseInt(hex.substring(i, i + 2), 16);
         if (charCode !== 0) {
           str += String.fromCharCode(charCode);
         }
@@ -30,7 +30,7 @@ export function feltToString(felt: bigint | string): string {
     const hex = felt.toString(16);
     let str = '';
     for (let i = 0; i < hex.length; i += 2) {
-      const charCode = parseInt(hex.substr(i, 2), 16);
+      const charCode = parseInt(hex.substring(i, i + 2), 16);
       if (charCode !== 0) {
         str += String.fromCharCode(charCode);
       }

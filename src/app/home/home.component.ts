@@ -2,6 +2,7 @@ import { Component, inject, signal, ChangeDetectionStrategy } from '@angular/cor
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { WalletService } from '../services/wallet.service';
+import { ValidationService } from '../services/validation.service';
 import { ERC721ABI } from '../../abi/ERC721';
 import { ERC20ABI } from '../../abi/ERC20';
 import { CHAIN_ID, CONTRACT_ADDRESSES, ChainIdType } from '../services/address';
@@ -19,6 +20,7 @@ import { feltToString, formatUnits } from '../utils/starknet-utils';
 })
 export class HomeComponent {
   walletService = inject(WalletService);
+  private validationService = inject(ValidationService);
 
   // Form properties
   nftContractAddress: string = '';
@@ -185,6 +187,16 @@ export class HomeComponent {
       this.nftName.set('');
       this.nftSymbol.set('');
       this.nftBalance.set(0);
+      this.errorMessage.set('');
+      return;
+    }
+
+    // Validate the NFT contract address format
+    if (!this.validationService.isValidStarknetAddress(this.nftContractAddress)) {
+      this.errorMessage.set('Invalid NFT contract address format');
+      this.nftName.set('');
+      this.nftSymbol.set('');
+      this.nftBalance.set(0);
       return;
     }
 
@@ -232,6 +244,19 @@ export class HomeComponent {
   async checkERC20Details(): Promise<void> {
     if (!this.tokenContractAddress) {
       // Reset token details if no token address is provided
+      this.tokenName.set('');
+      this.tokenSymbol.set('');
+      this.tokenDecimals.set(18);
+      this.tokenBalance.set('0');
+      this.tokenAllowance.set('0');
+      this.isTokenApproved.set(false);
+      this.errorMessage.set('');
+      return;
+    }
+
+    // Validate the token contract address format
+    if (!this.validationService.isValidStarknetAddress(this.tokenContractAddress)) {
+      this.errorMessage.set('Invalid token contract address format');
       this.tokenName.set('');
       this.tokenSymbol.set('');
       this.tokenDecimals.set(18);
@@ -361,13 +386,25 @@ export class HomeComponent {
       throw new Error('Wallet not connected');
     }
 
+    // Validate and parse NFT IDs using the validation service
+    let nftIdsBigInt: bigint[];
+    try {
+      nftIdsBigInt = this.validationService.sanitizeNftIds(this.nftIds);
+    } catch (error) {
+      this.errorMessage.set(error instanceof Error ? error.message : 'Invalid NFT IDs');
+      return;
+    }
+
+    // Ensure at least one NFT ID is provided
+    if (nftIdsBigInt.length === 0) {
+      this.errorMessage.set('Please enter at least one NFT ID');
+      return;
+    }
+
     const pairFactoryAddress = CONTRACT_ADDRESSES[this.currentChainId].PAIR_FACTORY;
 
-    // Parse NFT IDs and convert to u256 format
-    const nftIdsList = this.nftIds.split(',').map(id => {
-      const trimmedId = id.trim();
-      return uint256.bnToUint256(BigInt(trimmedId));
-    });
+    // Convert validated NFT IDs to u256 format
+    const nftIdsList = nftIdsBigInt.map(id => uint256.bnToUint256(id));
 
     // Convert starting price to u128 (with 18 decimals)
     const spotPrice = BigInt(Math.floor(parseFloat(this.startingPrice) * 1e18));
