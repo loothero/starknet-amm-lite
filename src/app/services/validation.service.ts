@@ -64,12 +64,6 @@ export class ValidationService {
 
       try {
         const id = BigInt(part);
-
-        // Ensure non-negative
-        if (id < 0n) {
-          throw new Error(`NFT ID cannot be negative: ${part}`);
-        }
-
         result.push(id);
       } catch (e) {
         throw new Error(`Failed to parse NFT ID: ${part}`);
@@ -102,9 +96,9 @@ export class ValidationService {
       return false;
     }
 
-    // Parse to check if it's a valid positive number
+    // Parse to check if it's a valid positive number (zero not allowed)
     const num = parseFloat(trimmed);
-    if (isNaN(num) || num < 0) {
+    if (isNaN(num) || num <= 0) {
       return false;
     }
 
