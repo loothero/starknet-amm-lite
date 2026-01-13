@@ -1,4 +1,4 @@
-import { Component, OnInit, inject, signal } from '@angular/core';
+import { Component, OnInit, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ActivatedRoute } from '@angular/router';
 import { FormsModule } from '@angular/forms';
@@ -9,21 +9,16 @@ import { ListingBookABI } from '../../abi/ListingBook';
 import { Pair721ABI } from '../../abi/Pair721';
 import { ERC721ABI } from '../../abi/ERC721';
 import { Contract, uint256 } from 'starknet';
-
-// Define a type for the listing data
-interface ListingData {
-  pairAddress: string;
-  nftIds: readonly bigint[];
-  price: bigint; // Price to buy an NFT (inputAmount from getBuyNFTQuote)
-  isBuying?: boolean; // Flag to track if a buy transaction is in progress
-}
+import { feltToString, formatPrice } from '../utils/starknet-utils';
+import { ListingData } from '../types/starknet.types';
 
 @Component({
   selector: 'app-browse',
   standalone: true,
   imports: [CommonModule, FormsModule],
   templateUrl: './browse.component.html',
-  styleUrl: './browse.component.css'
+  styleUrl: './browse.component.css',
+  changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class BrowseComponent implements OnInit {
   private route = inject(ActivatedRoute);
@@ -156,8 +151,8 @@ export class BrowseComponent implements OnInit {
       console.log('ERC721 listings:', listings);
 
       // Update the token metadata signals
-      this.tokenName.set(this.feltToString(name));
-      this.tokenSymbol.set(this.feltToString(symbol));
+      this.tokenName.set(feltToString(name));
+      this.tokenSymbol.set(feltToString(symbol));
 
       // Update the listings signal
       const listingsArray = Array.isArray(listings) ? listings : [];
@@ -173,38 +168,6 @@ export class BrowseComponent implements OnInit {
       this.tokenName.set('Unknown Collection');
       this.tokenSymbol.set('???');
     }
-  }
-
-  /**
-   * Convert felt252 to string
-   */
-  private feltToString(felt: any): string {
-    if (typeof felt === 'string') {
-      if (felt.startsWith('0x')) {
-        const hex = felt.slice(2);
-        let str = '';
-        for (let i = 0; i < hex.length; i += 2) {
-          const charCode = parseInt(hex.substr(i, 2), 16);
-          if (charCode !== 0) {
-            str += String.fromCharCode(charCode);
-          }
-        }
-        return str;
-      }
-      return felt;
-    }
-    if (typeof felt === 'bigint') {
-      const hex = felt.toString(16);
-      let str = '';
-      for (let i = 0; i < hex.length; i += 2) {
-        const charCode = parseInt(hex.substr(i, 2), 16);
-        if (charCode !== 0) {
-          str += String.fromCharCode(charCode);
-        }
-      }
-      return str;
-    }
-    return String(felt);
   }
 
   /**
@@ -269,35 +232,12 @@ export class BrowseComponent implements OnInit {
 
   /**
    * Format a bigint price to a human-readable string with limited decimal places
+   * Uses the centralized formatPrice utility
    * @param price The price as a bigint
    * @returns Formatted price string
    */
-  formatPrice(price: bigint): string {
-    try {
-      // Convert the bigint to ETH format (18 decimals)
-      const divisor = BigInt(10 ** 18);
-      const integerPart = price / divisor;
-      const fractionalPart = price % divisor;
-
-      let fractionalStr = fractionalPart.toString().padStart(18, '0');
-      fractionalStr = fractionalStr.replace(/0+$/, '');
-
-      const numPrice = parseFloat(`${integerPart}.${fractionalStr || '0'}`);
-
-      // Format the number based on its size
-      if (numPrice < 0.000001 && numPrice > 0) {
-        return numPrice.toExponential(2);
-      } else if (numPrice < 0.001) {
-        return numPrice.toFixed(6);
-      } else if (numPrice < 1) {
-        return numPrice.toFixed(4);
-      } else {
-        return numPrice.toFixed(2);
-      }
-    } catch (error) {
-      console.error('Error formatting price:', error);
-      return '0.00';
-    }
+  formatPriceDisplay(price: bigint): string {
+    return formatPrice(price);
   }
 
   /**

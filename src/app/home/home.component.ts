@@ -1,22 +1,26 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { WalletService } from '../services/wallet.service';
+import { ValidationService } from '../services/validation.service';
 import { ERC721ABI } from '../../abi/ERC721';
 import { ERC20ABI } from '../../abi/ERC20';
 import { CHAIN_ID, CONTRACT_ADDRESSES, ChainIdType } from '../services/address';
 import { FactoryABI } from '../../abi/Factory';
 import { Contract, uint256 } from 'starknet';
+import { feltToString, formatUnits } from '../utils/starknet-utils';
 
 @Component({
   selector: 'app-home',
   standalone: true,
   imports: [CommonModule, FormsModule],
   templateUrl: './home.component.html',
-  styleUrl: './home.component.css'
+  styleUrl: './home.component.css',
+  changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class HomeComponent {
   walletService = inject(WalletService);
+  private validationService = inject(ValidationService);
 
   // Form properties
   nftContractAddress: string = '';
@@ -183,6 +187,16 @@ export class HomeComponent {
       this.nftName.set('');
       this.nftSymbol.set('');
       this.nftBalance.set(0);
+      this.errorMessage.set('');
+      return;
+    }
+
+    // Validate the NFT contract address format
+    if (!this.validationService.isValidStarknetAddress(this.nftContractAddress)) {
+      this.errorMessage.set('Invalid NFT contract address format');
+      this.nftName.set('');
+      this.nftSymbol.set('');
+      this.nftBalance.set(0);
       return;
     }
 
@@ -207,8 +221,8 @@ export class HomeComponent {
       ]);
 
       // Decode felt252 to string for name and symbol
-      this.nftName.set(this.feltToString(name));
-      this.nftSymbol.set(this.feltToString(symbol));
+      this.nftName.set(feltToString(name));
+      this.nftSymbol.set(feltToString(symbol));
 
       // Convert balance from u256 to number
       const balanceBigInt = uint256.uint256ToBN(balance);
@@ -225,45 +239,24 @@ export class HomeComponent {
   }
 
   /**
-   * Convert felt252 to string
-   */
-  private feltToString(felt: any): string {
-    if (typeof felt === 'string') {
-      // If it's already a hex string, decode it
-      if (felt.startsWith('0x')) {
-        const hex = felt.slice(2);
-        let str = '';
-        for (let i = 0; i < hex.length; i += 2) {
-          const charCode = parseInt(hex.substr(i, 2), 16);
-          if (charCode !== 0) {
-            str += String.fromCharCode(charCode);
-          }
-        }
-        return str;
-      }
-      return felt;
-    }
-    // If it's a BigInt, convert to hex and decode
-    if (typeof felt === 'bigint') {
-      const hex = felt.toString(16);
-      let str = '';
-      for (let i = 0; i < hex.length; i += 2) {
-        const charCode = parseInt(hex.substr(i, 2), 16);
-        if (charCode !== 0) {
-          str += String.fromCharCode(charCode);
-        }
-      }
-      return str;
-    }
-    return String(felt);
-  }
-
-  /**
    * Check ERC20 token details when the token address changes
    */
   async checkERC20Details(): Promise<void> {
     if (!this.tokenContractAddress) {
       // Reset token details if no token address is provided
+      this.tokenName.set('');
+      this.tokenSymbol.set('');
+      this.tokenDecimals.set(18);
+      this.tokenBalance.set('0');
+      this.tokenAllowance.set('0');
+      this.isTokenApproved.set(false);
+      this.errorMessage.set('');
+      return;
+    }
+
+    // Validate the token contract address format
+    if (!this.validationService.isValidStarknetAddress(this.tokenContractAddress)) {
+      this.errorMessage.set('Invalid token contract address format');
       this.tokenName.set('');
       this.tokenSymbol.set('');
       this.tokenDecimals.set(18);
@@ -295,13 +288,13 @@ export class HomeComponent {
       ]);
 
       // Decode felt252 to string for name and symbol
-      this.tokenName.set(this.feltToString(name));
-      this.tokenSymbol.set(this.feltToString(symbol));
+      this.tokenName.set(feltToString(name));
+      this.tokenSymbol.set(feltToString(symbol));
       this.tokenDecimals.set(Number(decimals));
 
       // Convert balance from u256 to string with decimals
       const balanceBigInt = uint256.uint256ToBN(balance);
-      this.tokenBalance.set(this.formatUnits(balanceBigInt, Number(decimals)));
+      this.tokenBalance.set(formatUnits(balanceBigInt, Number(decimals)));
 
       // Check token approval
       await this.checkERC20Approval();
@@ -311,27 +304,6 @@ export class HomeComponent {
     } finally {
       this.isCheckingToken.set(false);
     }
-  }
-
-  /**
-   * Format a BigInt value with decimals
-   */
-  private formatUnits(value: bigint, decimals: number): string {
-    const divisor = BigInt(10 ** decimals);
-    const integerPart = value / divisor;
-    const fractionalPart = value % divisor;
-
-    let fractionalStr = fractionalPart.toString().padStart(decimals, '0');
-    fractionalStr = fractionalStr.replace(/0+$/, '');
-
-    if (fractionalStr.length === 0) {
-      return integerPart.toString();
-    }
-
-    // Limit to 6 decimal places
-    fractionalStr = fractionalStr.slice(0, 6);
-
-    return `${integerPart}.${fractionalStr}`;
   }
 
   /**
@@ -361,7 +333,7 @@ export class HomeComponent {
       this.tokenAllowanceRaw.set(allowanceBigInt);
 
       // Format the allowance for display
-      this.tokenAllowance.set(this.formatUnits(allowanceBigInt, this.tokenDecimals()));
+      this.tokenAllowance.set(formatUnits(allowanceBigInt, this.tokenDecimals()));
 
       // Consider approved if allowance is greater than 0
       this.isTokenApproved.set(allowanceBigInt > 0n);
@@ -414,13 +386,25 @@ export class HomeComponent {
       throw new Error('Wallet not connected');
     }
 
+    // Validate and parse NFT IDs using the validation service
+    let nftIdsBigInt: bigint[];
+    try {
+      nftIdsBigInt = this.validationService.sanitizeNftIds(this.nftIds);
+    } catch (error) {
+      this.errorMessage.set(error instanceof Error ? error.message : 'Invalid NFT IDs');
+      return;
+    }
+
+    // Ensure at least one NFT ID is provided
+    if (nftIdsBigInt.length === 0) {
+      this.errorMessage.set('Please enter at least one NFT ID');
+      return;
+    }
+
     const pairFactoryAddress = CONTRACT_ADDRESSES[this.currentChainId].PAIR_FACTORY;
 
-    // Parse NFT IDs and convert to u256 format
-    const nftIdsList = this.nftIds.split(',').map(id => {
-      const trimmedId = id.trim();
-      return uint256.bnToUint256(BigInt(trimmedId));
-    });
+    // Convert validated NFT IDs to u256 format
+    const nftIdsList = nftIdsBigInt.map(id => uint256.bnToUint256(id));
 
     // Convert starting price to u128 (with 18 decimals)
     const spotPrice = BigInt(Math.floor(parseFloat(this.startingPrice) * 1e18));

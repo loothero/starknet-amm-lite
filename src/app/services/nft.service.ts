@@ -1,5 +1,6 @@
-import { Injectable } from '@angular/core';
-import { Subject, BehaviorSubject } from 'rxjs';
+import { Injectable, signal, computed } from '@angular/core';
+import { toObservable } from '@angular/core/rxjs-interop';
+import { Observable } from 'rxjs';
 import { WalletService } from './wallet.service';
 import { Pair721ABI } from '../../abi/Pair721';
 import { uint256 } from 'starknet';
@@ -34,26 +35,44 @@ export interface TransactionResult {
   providedIn: 'root'
 })
 export class NFTService {
-  // Transaction status subjects
-  private transactionStatus = new BehaviorSubject<TransactionStatus>(TransactionStatus.IDLE);
-  private transactionStarted = new Subject<NFTTransactionParams>();
-  private transactionPending = new Subject<StarknetHash>();
-  private transactionSuccess = new Subject<StarknetHash>();
-  private transactionError = new Subject<Error>();
-  private transactionComplete = new Subject<TransactionResult>();
+  // Transaction status signals
+  private readonly _transactionStatus = signal<TransactionStatus>(TransactionStatus.IDLE);
+  private readonly _currentTransaction = signal<NFTTransactionParams | null>(null);
+  private readonly _lastTransactionHash = signal<StarknetHash | null>(null);
+  private readonly _lastError = signal<Error | null>(null);
+  private readonly _lastResult = signal<TransactionResult | null>(null);
 
-  // Current transaction data
-  private currentTransaction: NFTTransactionParams | null = null;
+  // Public readonly signals
+  public readonly transactionStatus = this._transactionStatus.asReadonly();
+  public readonly currentTransaction = this._currentTransaction.asReadonly();
+  public readonly lastTransactionHash = this._lastTransactionHash.asReadonly();
+  public readonly lastError = this._lastError.asReadonly();
+  public readonly lastResult = this._lastResult.asReadonly();
+
+  // Computed signals for convenience
+  public readonly isPending = computed(() => this._transactionStatus() === TransactionStatus.PENDING);
+  public readonly isSuccess = computed(() => this._transactionStatus() === TransactionStatus.SUCCESS);
+  public readonly isError = computed(() => this._transactionStatus() === TransactionStatus.ERROR);
+  public readonly isIdle = computed(() => this._transactionStatus() === TransactionStatus.IDLE);
+
+  // Observable created from signal for backward compatibility
+  // toObservable must be called in injection context (class property initializer)
+  private readonly _transactionStatus$ = toObservable(this._transactionStatus);
+  private _deprecationWarned = false;
+
+  /**
+   * Legacy observable for backward compatibility
+   * @deprecated Use transactionStatus signal instead
+   */
+  public get transactionStatus$(): Observable<TransactionStatus> {
+    if (!this._deprecationWarned) {
+      console.warn('transactionStatus$ is deprecated. Use transactionStatus signal instead.');
+      this._deprecationWarned = true;
+    }
+    return this._transactionStatus$;
+  }
 
   constructor(private walletService: WalletService) {}
-
-  // Observable streams
-  public transactionStatus$ = this.transactionStatus.asObservable();
-  public transactionStarted$ = this.transactionStarted.asObservable();
-  public transactionPending$ = this.transactionPending.asObservable();
-  public transactionSuccess$ = this.transactionSuccess.asObservable();
-  public transactionError$ = this.transactionError.asObservable();
-  public transactionComplete$ = this.transactionComplete.asObservable();
 
   /**
    * Buy an NFT from a listing
@@ -62,34 +81,30 @@ export class NFTService {
    */
   async buyNFT(params: NFTTransactionParams): Promise<TransactionResult> {
     try {
-      // Reset transaction status
-      this.transactionStatus.next(TransactionStatus.PENDING);
-      this.currentTransaction = params;
-
-      // Emit transaction started event
-      this.transactionStarted.next(params);
+      // Reset and set pending state
+      this._transactionStatus.set(TransactionStatus.PENDING);
+      this._currentTransaction.set(params);
+      this._lastError.set(null);
+      this._lastTransactionHash.set(null);
 
       // Check if there are any NFTs available
       if (!params.nftIds.length) {
         const error = new Error('No NFTs available in this listing');
-        this.handleTransactionError(error);
-        return { status: TransactionStatus.ERROR, error, pairAddress: params.pairAddress };
+        return this.handleTransactionError(error, params.pairAddress);
       }
 
       // Get the account
       const account = this.walletService.getAccount();
       if (!account) {
         const error = new Error('No wallet account available');
-        this.handleTransactionError(error);
-        return { status: TransactionStatus.ERROR, error, pairAddress: params.pairAddress };
+        return this.handleTransactionError(error, params.pairAddress);
       }
 
       // Get the wallet address
       const walletAddress = this.walletService.walletAddress();
       if (!walletAddress) {
         const error = new Error('No wallet address available');
-        this.handleTransactionError(error);
-        return { status: TransactionStatus.ERROR, error, pairAddress: params.pairAddress };
+        return this.handleTransactionError(error, params.pairAddress);
       }
 
       // Execute the swap transaction on Starknet
@@ -100,8 +115,8 @@ export class NFTService {
         walletAddress
       );
 
-      // Emit transaction pending event
-      this.transactionPending.next(hash);
+      // Update hash signal
+      this._lastTransactionHash.set(hash);
 
       // Wait for the transaction to be confirmed
       await this.walletService.waitForTransaction(hash);
@@ -109,26 +124,20 @@ export class NFTService {
       // Update wallet balance
       await this.walletService.fetchBalance();
 
-      // Emit transaction success event
-      this.transactionSuccess.next(hash);
-
-      // Emit transaction complete event
-      const result = {
+      // Create success result
+      const result: TransactionResult = {
         status: TransactionStatus.SUCCESS,
         hash,
         pairAddress: params.pairAddress
       };
-      this.transactionComplete.next(result);
-      this.transactionStatus.next(TransactionStatus.SUCCESS);
+
+      // Update signals
+      this._transactionStatus.set(TransactionStatus.SUCCESS);
+      this._lastResult.set(result);
 
       return result;
     } catch (error) {
-      this.handleTransactionError(error as Error);
-      return {
-        status: TransactionStatus.ERROR,
-        error: error as Error,
-        pairAddress: params.pairAddress
-      };
+      return this.handleTransactionError(error as Error, params.pairAddress);
     }
   }
 
@@ -171,23 +180,34 @@ export class NFTService {
   /**
    * Handle transaction errors
    * @param error The error object
+   * @param pairAddress Optional pair address for the result
+   * @returns TransactionResult with error status
    */
-  private handleTransactionError(error: Error): void {
+  private handleTransactionError(error: Error, pairAddress?: string): TransactionResult {
     console.error('Error in NFT transaction:', error);
-    this.transactionError.next(error);
-    this.transactionComplete.next({
+
+    const result: TransactionResult = {
       status: TransactionStatus.ERROR,
       error,
-      pairAddress: this.currentTransaction?.pairAddress
-    });
-    this.transactionStatus.next(TransactionStatus.ERROR);
+      pairAddress
+    };
+
+    // Update signals
+    this._lastError.set(error);
+    this._transactionStatus.set(TransactionStatus.ERROR);
+    this._lastResult.set(result);
+
+    return result;
   }
 
   /**
    * Reset the transaction status
    */
   public resetTransactionStatus(): void {
-    this.transactionStatus.next(TransactionStatus.IDLE);
-    this.currentTransaction = null;
+    this._transactionStatus.set(TransactionStatus.IDLE);
+    this._currentTransaction.set(null);
+    this._lastTransactionHash.set(null);
+    this._lastError.set(null);
+    this._lastResult.set(null);
   }
 }

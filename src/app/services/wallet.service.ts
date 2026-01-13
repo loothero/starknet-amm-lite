@@ -47,6 +47,26 @@ interface StarknetWallet {
   off: (event: string, callback: (...args: any[]) => void) => void;
 }
 
+/**
+ * Runtime type guard to verify an object conforms to the StarknetWallet interface.
+ * This prevents unsafe type assertions on arbitrary window properties.
+ */
+function isStarknetWallet(obj: unknown): obj is StarknetWallet {
+  if (obj === null || typeof obj !== 'object') {
+    return false;
+  }
+  const wallet = obj as Record<string, unknown>;
+  // Required method: enable must be a function
+  if (typeof wallet['enable'] !== 'function') {
+    return false;
+  }
+  // Required methods: on and off must be functions for event handling
+  if (typeof wallet['on'] !== 'function' || typeof wallet['off'] !== 'function') {
+    return false;
+  }
+  return true;
+}
+
 @Injectable({
   providedIn: 'root'
 })
@@ -100,27 +120,32 @@ export class WalletService {
 
   /**
    * Get available Starknet wallets from the window object
+   * @returns Array of detected wallet objects
    */
-  private async getAvailableWallets(): Promise<any[]> {
-    const wallets: any[] = [];
+  private async getAvailableWallets(): Promise<StarknetWallet[]> {
+    const wallets: StarknetWallet[] = [];
 
     // Check for common Starknet wallets
     if (typeof window !== 'undefined') {
-      const win = window as any;
+      // Access window properties safely and validate with type guard
+      const win = window as unknown as Record<string, unknown>;
 
-      // ArgentX
-      if (win.starknet_argentX) {
-        wallets.push(win.starknet_argentX);
+      // ArgentX - validate before adding
+      const argentX = win['starknet_argentX'];
+      if (isStarknetWallet(argentX)) {
+        wallets.push(argentX);
       }
 
-      // Braavos
-      if (win.starknet_braavos) {
-        wallets.push(win.starknet_braavos);
+      // Braavos - validate before adding
+      const braavos = win['starknet_braavos'];
+      if (isStarknetWallet(braavos)) {
+        wallets.push(braavos);
       }
 
-      // Generic starknet object (legacy)
-      if (win.starknet && !wallets.includes(win.starknet)) {
-        wallets.push(win.starknet);
+      // Generic starknet object (legacy) - validate before adding
+      const genericWallet = win['starknet'];
+      if (isStarknetWallet(genericWallet) && !wallets.includes(genericWallet)) {
+        wallets.push(genericWallet);
       }
     }
 

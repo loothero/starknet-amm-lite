@@ -1,4 +1,4 @@
-import { Component, OnInit, inject, signal } from '@angular/core';
+import { Component, OnInit, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ActivatedRoute } from '@angular/router';
 import { FormsModule } from '@angular/forms';
@@ -8,36 +8,16 @@ import { CHAIN_ID, ChainIdType, CONTRACT_ADDRESSES, normalizeStarknetAddress } f
 import { Pair721ABI } from '../../abi/Pair721';
 import { ERC721ABI } from '../../abi/ERC721';
 import { Contract, uint256 } from 'starknet';
-
-// Define a type for NFT attributes
-interface NFTAttribute {
-  trait_type: string;
-  value: string | number;
-}
-
-// Define a type for NFT metadata
-interface NFTMetadata {
-  name: string;
-  image: string;
-  attributes: NFTAttribute[];
-}
-
-// Define a type for the NFT data with price and metadata
-interface NFTData {
-  id: bigint;
-  price: bigint;
-  isBuying?: boolean;
-  metadata?: NFTMetadata;
-  isLoadingMetadata?: boolean;
-  metadataError?: string;
-}
+import { feltToString, formatPrice } from '../utils/starknet-utils';
+import { NFTMetadata, NFTData } from '../types/starknet.types';
 
 @Component({
   selector: 'app-manage',
   standalone: true,
   imports: [CommonModule, FormsModule],
   templateUrl: './manage.component.html',
-  styleUrl: './manage.component.css'
+  styleUrl: './manage.component.css',
+  changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class ManageComponent implements OnInit {
   private route = inject(ActivatedRoute);
@@ -301,35 +281,12 @@ export class ManageComponent implements OnInit {
 
   /**
    * Format a bigint price to a human-readable string with limited decimal places
+   * Uses the centralized formatPrice utility
    * @param price The price as a bigint
    * @returns Formatted price string
    */
-  formatPrice(price: bigint): string {
-    try {
-      // Convert the bigint to ETH format (18 decimals)
-      const divisor = BigInt(10 ** 18);
-      const integerPart = price / divisor;
-      const fractionalPart = price % divisor;
-
-      let fractionalStr = fractionalPart.toString().padStart(18, '0');
-      fractionalStr = fractionalStr.replace(/0+$/, '');
-
-      const numPrice = parseFloat(`${integerPart}.${fractionalStr || '0'}`);
-
-      // Format the number based on its size
-      if (numPrice < 0.000001 && numPrice > 0) {
-        return numPrice.toExponential(2);
-      } else if (numPrice < 0.001) {
-        return numPrice.toFixed(6);
-      } else if (numPrice < 1) {
-        return numPrice.toFixed(4);
-      } else {
-        return numPrice.toFixed(2);
-      }
-    } catch (error) {
-      console.error('Error formatting price:', error);
-      return '0.00';
-    }
+  formatPriceDisplay(price: bigint): string {
+    return formatPrice(price);
   }
 
   /**
@@ -466,9 +423,9 @@ export class ManageComponent implements OnInit {
 
       // Handle array of felt252 (Starknet string representation)
       if (Array.isArray(tokenURI)) {
-        uriString = tokenURI.map((felt: any) => this.feltToString(felt)).join('');
+        uriString = tokenURI.map((felt: bigint | string) => feltToString(felt)).join('');
       } else {
-        uriString = this.feltToString(tokenURI);
+        uriString = feltToString(tokenURI);
       }
 
       // Check if this is base64 encoded data
@@ -495,35 +452,4 @@ export class ManageComponent implements OnInit {
     }
   }
 
-  /**
-   * Convert felt252 to string
-   */
-  private feltToString(felt: any): string {
-    if (typeof felt === 'string') {
-      if (felt.startsWith('0x')) {
-        const hex = felt.slice(2);
-        let str = '';
-        for (let i = 0; i < hex.length; i += 2) {
-          const charCode = parseInt(hex.substr(i, 2), 16);
-          if (charCode !== 0) {
-            str += String.fromCharCode(charCode);
-          }
-        }
-        return str;
-      }
-      return felt;
-    }
-    if (typeof felt === 'bigint') {
-      const hex = felt.toString(16);
-      let str = '';
-      for (let i = 0; i < hex.length; i += 2) {
-        const charCode = parseInt(hex.substr(i, 2), 16);
-        if (charCode !== 0) {
-          str += String.fromCharCode(charCode);
-        }
-      }
-      return str;
-    }
-    return String(felt);
-  }
 }

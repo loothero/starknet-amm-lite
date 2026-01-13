@@ -5,6 +5,14 @@
   <title>Starknet AMM Lite</title>
   <base href="/">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!--
+    Content Security Policy Notes:
+    - 'unsafe-inline' for script-src/style-src: Required for Angular's runtime compilation.
+      Angular dynamically creates inline styles for components. Removing this would break the app.
+      This is a known limitation documented at: https://angular.io/guide/security#content-security-policy
+    - connect-src includes blastapi.io: The app's RPC endpoints (see src/app/services/address.ts)
+  -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https: ipfs:; connect-src 'self' https://*.starknet.io https://*.infura.io https://*.blastapi.io wss://*.starknet.io;">
 </head>
 <body class="bg-black">
   <app-root></app-root>
